@@ -26,12 +26,9 @@ jobs:
           pip install --upgrade pip
           pip install cython==0.29.36 buildozer
 
-      - name: Accept Android SDK licenses
+      - name: Clean conflicting buildozer state
         run: |
-          export ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk
-          mkdir -p $ANDROID_HOME
-          # Crée un faux SDK minimal pour forcer l'acceptation des licences via les outils globaux si nécessaire
-          yes | sdkmanager --licenses || true
+          rm -rf ~/.buildozer/android/platform/android-sdk
 
       - name: Build with Buildozer
         run: |
