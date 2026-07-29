@@ -34,10 +34,10 @@ warn_root = 1
 
 android.accept_sdk_license = True
 
-android.api = 33
+android.api = 30
 
 android.minapi = 21
 
-android.sdk_build_tools_version = 33.0.0
+android.sdk_build_tools_version = 30.0.3
 
-android.ndk = 25b
+android.ndk = 23b
