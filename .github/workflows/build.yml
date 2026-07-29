@@ -26,9 +26,10 @@ jobs:
           pip install --upgrade pip
           pip install cython==0.29.36 buildozer
 
-      - name: Clean conflicting buildozer state
+      - name: Accept Android SDK licenses automatically
         run: |
-          rm -rf ~/.buildozer/android/platform/android-sdk
+          mkdir -p ~/.android
+          echo "d56f5187479451eabf01fb78af6dfcb131a648cd" > ~/.android/repositories.cfg
 
       - name: Build with Buildozer
         run: |
