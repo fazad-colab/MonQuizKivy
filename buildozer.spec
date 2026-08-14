@@ -13,7 +13,7 @@ package.domain = org.mathquiz
 source.include_exts = py,png,jpg,kv,atlas,ogg
 
 # (list) Répertoire(s) source (relatif à .spec)
-source.include_dir = .
+source.dir = .
 
 # (list) Application par défaut (point d'entrée)
 source.main.ext = py
