@@ -11,7 +11,6 @@ requirements = python3,kivy
 # Laisse Buildozer gérer les versions recommandées pour éviter l'erreur de sdkmanager
 android.api = 34
 android.minapi = 21
-android.sdk = 34
 android.ndk = 28c
 
 android.permissions = INTERNET
