@@ -5,7 +5,7 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-
+    
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -19,27 +19,14 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install dependencies
+    - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-            python3-pip \
-            build-essential \
-            git \
-            python3-dev \
-            ffmpeg \
-            libsdl2-dev \
-            libsdl2-image-dev \
-            libsdl2-mixer-dev \
-            libsdl2-ttf-dev \
-            libportmidi-dev \
-            libswscale-dev \
-            libavformat-dev \
-            libavcodec-dev \
-            zlib1g-dev \
-            unzip \
-            libltdl-dev \
-            openjdk-17-jdk
+            python3-pip build-essential git python3-dev ffmpeg \
+            libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+            libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
+            zlib1g-dev unzip libltdl-dev openjdk-17-jdk
 
     - name: Install Buildozer and Cython
       run: |
@@ -47,12 +34,18 @@ jobs:
         pip install --upgrade cython==0.29.33
         pip install buildozer
 
-    - name: Force Accept Android Licenses
+    - name: Set ANDROID_HOME
+      run: echo "ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
+
+    - name: Install Android SDK Command Line Tools
       run: |
-        mkdir -p $HOME/.buildozer/android/platform/android-sdk/licenses
-        echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55" > $HOME/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
-        echo -e "\n24333f8a43b681623c5ab31a293df75ae01334cd" >> $HOME/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
-        echo -e "\nd56f5187479451eabf01fb78af6dfcb131a648fa" >> $HOME/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
+        mkdir -p $ANDROID_HOME/cmdline-tools
+        cd $ANDROID_HOME/cmdline-tools
+        wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdtools.zip
+        unzip cmdtools.zip
+        mv cmdline-tools latest
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
     - name: Build with Buildozer
       run: |
