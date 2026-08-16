@@ -38,7 +38,8 @@ jobs:
             libavcodec-dev \
             zlib1g-dev \
             unzip \
-            libltdl-dev
+            libltdl-dev \
+            openjdk-17-jdk
 
     - name: Install Buildozer and Cython
       run: |
@@ -51,6 +52,7 @@ jobs:
         mkdir -p $HOME/.buildozer/android/platform/android-sdk/licenses
         echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55" > $HOME/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
         echo -e "\n24333f8a43b681623c5ab31a293df75ae01334cd" >> $HOME/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
+        echo -e "\nd56f5187479451eabf01fb78af6dfcb131a648fa" >> $HOME/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
 
     - name: Build with Buildozer
       run: |
