@@ -26,6 +26,16 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y python3-pip build-essential git python3-dev ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev unzip libltdl-dev
 
+    - name: Cache Buildozer  # <-- LE CACHE ICI
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.buildozer
+          .buildozer
+        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+        restore-keys: |
+          buildozer-${{ runner.os }}-
+
     - name: Install Buildozer and Cython
       run: |
         pip install --upgrade pip
@@ -43,9 +53,9 @@ jobs:
         unzip cmdtools.zip
         mv cmdline-tools latest
         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;25.2.9519653"
 
-    - name: Fix Buildozer sdkmanager path  # <-- LA LIGNE MAGIQUE
+    - name: Fix Buildozer sdkmanager path
       run: |
         mkdir -p $ANDROID_HOME/tools/bin
         ln -s $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager $ANDROID_HOME/tools/bin/sdkmanager
