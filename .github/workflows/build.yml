@@ -37,7 +37,8 @@ jobs:
             libavformat-dev \
             libavcodec-dev \
             zlib1g-dev \
-            unzip
+            unzip \
+            libltdl-dev
 
     - name: Install Buildozer and Cython
       run: |
@@ -46,10 +47,8 @@ jobs:
         pip install buildozer
 
     - name: Build with Buildozer
-      uses: ArtemSBulgakov/buildozer-action@v1
-      id: buildozer
-      with:
-        command: buildozer -v android debug
+      run: |
+        buildozer -v android debug
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
