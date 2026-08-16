@@ -11,7 +11,7 @@ requirements = python3,kivy
 # Laisse Buildozer gérer les versions recommandées pour éviter l'erreur de sdkmanager
 android.api = 34
 android.minapi = 21
-android.ndk = 28c
+android.ndk = 25b
 
 android.permissions = INTERNET
 orientation = portrait
