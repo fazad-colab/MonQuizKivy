@@ -6,7 +6,7 @@ source.include_exts = py,png,jpg,kv,atlas,ogg
 source.dir = .
 source.main.ext = py
 version = 1.0
-requirements = python3,kivy
+requirements = python3,kivy==2.3.0
 
 # Laisse Buildozer gérer les versions recommandées pour éviter l'erreur de sdkmanager
 android.api = 34
