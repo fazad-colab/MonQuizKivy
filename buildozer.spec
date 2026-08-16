@@ -26,10 +26,12 @@ version = 1.0
 requirements = python3,kivy
 
 # (str) Version de l'API Android cible
-android.api = 33
+android.api = 31
 
 # (str) Version minimale de l'API Android
 android.minapi = 21
+
+android.ndk = 25b 
 
 # (list) Permissions nécessaires (laisse vide si aucune, ou ajoute les permissions Android)
 android.permissions = INTERNET
