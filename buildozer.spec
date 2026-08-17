@@ -1,6 +1,8 @@
 [app]
-title = MonQuizKivy
-package.name = monquizkivy
+orientation = portrait
+fullscreen = 0
+title = QuizApp
+package.name = quizapp
 package.domain = org.fazad
 source.dir =.
 source.include_exts = py,png,jpg,kv,atlas,json
