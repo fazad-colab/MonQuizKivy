@@ -16,7 +16,7 @@ jobs:
         python-version: '3.10'
 
     - name: Set up JDK 17
-      uses: actions/setup-java@v5
+      uses: actions/setup-java@v5  # <-- TU AVAIS RAISON
       with:
         java-version: '17'
         distribution: 'temurin'
@@ -33,8 +33,6 @@ jobs:
           ~/.buildozer
           .buildozer
         key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
-        restore-keys: |
-          buildozer-${{ runner.os }}-
 
     - name: Install Buildozer and Cython
       run: |
@@ -58,21 +56,20 @@ jobs:
     - name: Fix Buildozer sdkmanager path
       run: |
         mkdir -p $ANDROID_HOME/tools/bin
-        ln -s $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager $ANDROID_HOME/tools/bin/sdkmanager
-        ln -s $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager $ANDROID_HOME/tools/bin/avdmanager
+        ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager $ANDROID_HOME/tools/bin/sdkmanager
+        ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager $ANDROID_HOME/tools/bin/avdmanager
 
     - name: Build with Buildozer
       timeout-minutes: 45
       run: |
         buildozer -v android debug 2>&1 | tee build.log
-        grep -i "error" build.log || echo "No error keyword found"
 
     - name: Upload Build Log
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: build-log
-        path: build.log  # <-- CORRIGÉ ICI
+        path: build.log
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
