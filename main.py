@@ -3,6 +3,8 @@ import math
 import json
 import os
 import sys
+os.environ['KIVY_ORIENTATION'] = 'portrait'
+from kivy.app import App
 os.environ['KIVY_AUDIO'] = 'sdl2'
 from kivy.core.window import Window 
 from kivy.uix.gridlayout import GridLayout
@@ -13,7 +15,6 @@ from kivy.uix.screenmanager import Screen
 from kivy.uix.image import Image
 from moteur_quiz import MoteurMathematique
 from kivy.metrics import dp
-from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
@@ -29,6 +30,9 @@ import webbrowser
 # Ajout pour les requêtes asynchrones
 class FixedDynamicQuizApp(App):
     def build(self):
+        Window.rotation = 0  # Force rotation 0 degré
+        Window.clearcolor = (0.1, 0.2, 0.4, 1) # ta couleur de fond
+        return TonEcranPrincipal()
         
         # --- VARIABLES GLOBALES DE SESSION ---
         self.score = 0
