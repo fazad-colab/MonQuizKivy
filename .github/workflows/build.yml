@@ -26,7 +26,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y python3-pip build-essential git python3-dev ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev unzip libltdl-dev
 
-    - name: Cache Buildozer  # <-- LE CACHE ICI
+    - name: Cache Buildozer
       uses: actions/cache@v4
       with:
         path: |
@@ -62,7 +62,17 @@ jobs:
         ln -s $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager $ANDROID_HOME/tools/bin/avdmanager
 
     - name: Build with Buildozer
-      run: buildozer -v android debug
+      timeout-minutes: 45
+      run: |
+        buildozer -v android debug 2>&1 | tee build.log
+        grep -i "error" build.log || echo "No error keyword found"
+
+    - name: Upload Build Log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log
+        path: build.log  # <-- CORRIGÉ ICI
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
