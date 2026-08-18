@@ -3,9 +3,11 @@ import math
 import json
 import os
 import sys
+import platform 
 os.environ['KIVY_ORIENTATION'] = 'portrait'
 os.environ['KIVY_AUDIO'] = 'sdl2'
 from kivy.app import App
+from kivy.uix.popup import Popup
 from kivy.core.window import Window 
 from kivy.uix.gridlayout import GridLayout
 from kivy.core.audio import SoundLoader
@@ -311,6 +313,101 @@ class FixedDynamicQuizApp(App):
         if self.sound and self.sound.state == 'stop':
             if hasattr(self, 'playlist') and self.playlist:
                 self.jouer_musique_suivante()
+
+    # ___IMPORTS A AJOUTER EN HAUT DU FICHIER___
+    def on_start(self):
+        # Cette fonction se lance automatiquement au démarrage
+        if platform == 'android':
+            self.verifier_permissions()
+        else:
+            # Si on est sur PC, on va direct au menu
+            if not self.nom_utilisateur:
+                self.demander_nom_utilisateur()
+            else:
+                self.afficher_menu_principal_modes()
+
+    def verifier_permissions(self):
+        from android.permissions import check_permission, request_permissions, Permission
+
+        PERMISSIONS = [
+            Permission.WRITE_EXTERNAL_STORAGE,
+            Permission.READ_EXTERNAL_STORAGE,
+            Permission.INTERNET
+        ]
+
+        permissions_manquantes = [p for p in PERMISSIONS if not check_permission(p)]
+
+        if permissions_manquantes:
+            # 1. On explique d'abord pourquoi
+            self.afficher_explication_permission(PERMISSIONS)
+        else:
+            # Si on a déjà toutes les perms, on va au menu
+            if not self.nom_utilisateur:
+                self.demander_nom_utilisateur()
+            else:
+                self.afficher_menu_principal_modes()
+
+    def afficher_explication_permission(self, perms):
+        contenu = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(15))
+
+        label = Label(
+            text="[b]Math Quiz Comores a besoin d'autorisations[/b]\n\n"
+                 "1. Stockage : Pour sauvegarder ta progression, XP et musiques\n"
+                 "2. Internet : Pour envoyer ton avis au développeur\n\n"
+                 "Sans ça l'application ne peut pas fonctionner correctement.",
+            markup=True,
+            halign='center',
+            valign='middle'
+        )
+        label.bind(size=lambda s, w: setattr(s, 'text_size', w))
+
+        btn = Button(text="J'ai compris", size_hint=(1, 0.3), background_color=(0.2, 0.6, 0.8, 1))
+        contenu.add_widget(label)
+        contenu.add_widget(btn)
+
+        popup = Popup(title="Autorisations requises", content=contenu, size_hint=(0.9, 0.5), auto_dismiss=False)
+
+        def demander(x):
+            popup.dismiss()
+            from android.permissions import request_permissions
+            request_permissions(perms, self.callback_permissions)
+
+        btn.bind(on_release=demander)
+        popup.open()
+
+    def callback_permissions(self, permissions, grant_results):
+        if not all(grant_results):
+            self.afficher_alerte_fermeture()
+        else:
+            # Si l'utilisateur accepte, on va au menu
+            if not self.nom_utilisateur:
+                self.demander_nom_utilisateur()
+            else:
+                self.afficher_menu_principal_modes()
+
+    def afficher_alerte_fermeture(self):
+        contenu = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(15))
+
+        label = Label(
+            text="[b]Autorisations requises![/b]\n\nPour vous offrir la meilleure expérience et faire fonctionner le quiz et l'audio, ces autorisations sont obligatoires.\nL'application va se fermer.",
+            markup=True,
+            halign='center',
+            valign='middle'
+        )
+        label.bind(size=lambda s, w: setattr(s, 'text_size', w))
+
+        btn = Button(text="Compris", size_hint=(1, 0.4), background_color=(0.2, 0.6, 0.8, 1))
+        contenu.add_widget(label)
+        contenu.add_widget(btn)
+
+        popup = Popup(title="Accès refusé", content=contenu, size_hint=(0.8, 0.4), auto_dismiss=False)
+
+        btn.bind(on_release=lambda x: self.fermer_application(popup))
+        popup.open()
+
+    def fermer_application(self, popup):
+        popup.dismiss()
+        sys.exit(0)
 
     def aller_au_menu_principal(self, ecran_intro):
         # 1. On retire le splash
