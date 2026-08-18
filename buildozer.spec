@@ -2,6 +2,8 @@
 
 # Nom affiché sous l'icone
 title = Math Quiz Comores
+# à changer à chaque mise à jour 
+version = 0.1.0
 
 # Nom du package pour le Play Store
 package.name = quizapp_comores
