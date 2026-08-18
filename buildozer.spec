@@ -1,22 +1,72 @@
 [app]
-orientation = portrait
-fullscreen = 0
-title = Math Quiz 
-package.name = quizapp_comores 
+
+# Nom affiché sous l'icone
+title = Math Quiz Comores
+
+# Nom du package pour le Play Store
+package.name = quizapp_comores
+
+# Domaine inversé. Change "fazad" par ton nom
 package.domain = org.fazad
+
+# Version de l'app
+version = 0.1.0
+
+# Orientation portrait
+orientation = portrait
+
+# Plein écran
+fullscreen = 0
+
+# Dossier source
 source.dir =.
-source.include_exts = py,png,jpg,kv,atlas,json,ogg
-version = 0.1
-android.permissions = WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE, INTERNET
-requirements = kivy
-android.requirements = sdl2,kivy
+
+# Fichiers à inclure dans l'APK. IMPORTANT pour musiques, images, json, logo
+source.include_exts = py,png,jpg,jpeg,kv,atlas,json,ogg
+
+# Dossiers à inclure EN PLUS
+#source.include_patterns = badges/*, sons/*
+
+# Exclure les fichiers inutiles
+source.exclude_dirs = tests, bin, venv
+source.exclude_exts = spec, pyc, pyo, swp, swo
+
+# Icone de l'application. Mets ton logo.png dans le dossier racine
+#icon.filename = logo.png
+
+# Splash screen au démarrage. Optionnel
+# presplash.filename = splash.png
+
+# Nom des exigences python
+requirements = python3,kivy,android,pyjnius
+
+# Recettes Android à compiler
+android.recipes = kivy,pyjnius
+
+# Permissions. Sur Android 13+ on a plus besoin du stockage
+# INTERNET pour envoyer les avis
+android.permissions = INTERNET
+
+# API cible. 33 = Android 13
 android.api = 33
 android.minapi = 21
-android.arch = arm64-v8a
-p4a.branch = master
-log_level = 2
+android.target_sdk_version = 33
+
+# Architecture. arm64 pour téléphones récents
+android.archs = arm64-v8a
+
+# Nom de l'APK de sortie
+android.filename = MathQuizComores.apk
+
+# Mode debug ou release
+android.debug = True
+
+# Utiliser p4a pour compiler
+android.p4a_branch = develop
+
+# Optimisations
+p4a.bootstrap = sdl2
 
 [buildozer]
-
 log_level = 2
 warn_on_root = 1
