@@ -4,8 +4,8 @@ import json
 import os
 import sys
 os.environ['KIVY_ORIENTATION'] = 'portrait'
-from kivy.app import App
 os.environ['KIVY_AUDIO'] = 'sdl2'
+from kivy.app import App
 from kivy.core.window import Window 
 from kivy.uix.gridlayout import GridLayout
 from kivy.core.audio import SoundLoader
@@ -32,7 +32,6 @@ class FixedDynamicQuizApp(App):
     def build(self):
         Window.rotation = 0  # Force rotation 0 degré
         Window.clearcolor = (0.1, 0.2, 0.4, 1) # ta couleur de fond
-        return TonEcranPrincipal()
         
         # --- VARIABLES GLOBALES DE SESSION ---
         self.score = 0
