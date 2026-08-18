@@ -1,12 +1,13 @@
 [app]
 orientation = portrait
 fullscreen = 0
-title = QuizApp
-package.name = quizapp
+title = Math Quiz 
+package.name = quizapp_comores 
 package.domain = org.fazad
 source.dir =.
-source.include_exts = py,png,jpg,kv,atlas,json
+source.include_exts = py,png,jpg,kv,atlas,json,ogg
 version = 0.1
+android.permissions = WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE, INTERNET
 requirements = kivy
 android.requirements = sdl2,kivy
 android.api = 33
