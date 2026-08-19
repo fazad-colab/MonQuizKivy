@@ -63,6 +63,7 @@ jobs:
       timeout-minutes: 45
       run: |
         buildozer -v android debug 2>&1 | tee build.log
+        working-directory: ./
 
     - name: Upload Build Log
       if: always()
