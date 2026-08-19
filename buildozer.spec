@@ -25,14 +25,14 @@ source.dir =.
 source.include_exts = py,png,jpg,jpeg,kv,atlas,json,ogg
 
 # Dossiers à inclure EN PLUS
-#source.include_patterns = badges/*, sons/*
+source.include_patterns = badges/*, musique/*
 
 # Exclure les fichiers inutiles
 source.exclude_dirs = tests, bin, venv
 source.exclude_exts = spec, pyc, pyo, swp, swo
 
 # Icone de l'application. Mets ton logo.png dans le dossier racine
-#icon.filename = logo.png
+icon.filename = logo.png
 
 # Splash screen au démarrage. Optionnel
 # presplash.filename = splash.png
