@@ -1,3 +1,0 @@
-buildozer android clean
-rm -rf.buildozer
-buildozer android debug
