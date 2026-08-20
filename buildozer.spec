@@ -22,14 +22,10 @@ fullscreen = 0
 source.dir =.
 
 # Fichiers à inclure dans l'APK. IMPORTANT pour musiques, images, json, logo
-source.include_exts = py,png,jpg,jpeg,kv,atlas,json,ogg
+source.include_exts = py,png,jpeg,kv,json,ogg
 
 # Dossiers à inclure EN PLUS
 source.include_patterns = badges/*, musiques/*
-
-# Exclure les fichiers inutiles
-source.exclude_dirs = tests, bin, venv
-source.exclude_exts = spec, pyc, pyo, swp, swo
 
 # Icone de l'application. Mets ton logo.png dans le dossier racine
 icon.filename = badges/logo.png
@@ -50,7 +46,7 @@ android.minapi = 21
 android.target_sdk_version = 33
 
 # Architecture. arm64 pour téléphones récents
-android.arch = arm64-v8a
+android.archs = arm64-v8a
 
 # Nom de l'APK de sortie
 android.filename = MathQuizComores.apk
