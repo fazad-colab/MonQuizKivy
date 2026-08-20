@@ -25,8 +25,7 @@ source.dir =.
 source.include_exts = py,png,jpg,jpeg,kv,atlas,json,ogg
 
 # Dossiers à inclure EN PLUS
-source.include_patterns = badges/*, musique/*
-Android.logcast_filters = *:S python:D
+source.include_patterns = badges/*, musiques/*
 
 # Exclure les fichiers inutiles
 source.exclude_dirs = tests, bin, venv
