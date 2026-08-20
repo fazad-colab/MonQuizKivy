@@ -32,13 +32,13 @@ source.exclude_dirs = tests, bin, venv
 source.exclude_exts = spec, pyc, pyo, swp, swo
 
 # Icone de l'application. Mets ton logo.png dans le dossier racine
-icon.filename = logo.png
+icon.filename = badges/*logo.png
 
 # Splash screen au démarrage. Optionnel
 presplash.filename = splash.png
 
 # Nom des exigences python
-requirements = python3,kivy,android,pyjnius
+requirements = python3,kivy =2.3.0 ,pyjnius
 
 # Permissions. Sur Android 13+ on a plus besoin du stockage
 # INTERNET pour envoyer les avis
