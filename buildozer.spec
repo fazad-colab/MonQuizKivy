@@ -35,13 +35,10 @@ source.exclude_exts = spec, pyc, pyo, swp, swo
 icon.filename = logo.png
 
 # Splash screen au démarrage. Optionnel
-# presplash.filename = splash.png
+presplash.filename = splash.png
 
 # Nom des exigences python
 requirements = python3,kivy,android,pyjnius
-
-# Recettes Android à compiler
-android.recipes = kivy,pyjnius
 
 # Permissions. Sur Android 13+ on a plus besoin du stockage
 # INTERNET pour envoyer les avis
