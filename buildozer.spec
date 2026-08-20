@@ -38,7 +38,7 @@ icon.filename = badges/*logo.png
 presplash.filename = splash.png
 
 # Nom des exigences python
-requirements = python3,kivy =2.3.0 ,pyjnius
+requirements = python3,kivy,pyjnius
 
 # Permissions. Sur Android 13+ on a plus besoin du stockage
 # INTERNET pour envoyer les avis
