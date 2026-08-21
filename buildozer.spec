@@ -25,7 +25,7 @@ source.dir =.
 source.include_exts = py,png,jpeg,kv,json,ogg
 
 # Dossiers à inclure EN PLUS
-source.include_patterns = badges/*, musiques/*
+source.include_patterns = badges/*, musiques/*, icône_appli/*
 
 # Icone de l'application. Mets ton logo.png dans le dossier racine
 icon.filename = badges/logo.png
@@ -34,11 +34,11 @@ icon.filename = badges/logo.png
 #presplash.filename = splash.png
 
 # Nom des exigences python
-requirements = kivy,pyjnius
+requirements = kivy,pyjnius,plyer
 
 # Permissions. Sur Android 13+ on a plus besoin du stockage
 # INTERNET pour envoyer les avis
-android.permissions = INTERNET
+android.permissions = INTERNET,POST_NOTIFICATIONS
 
 # API cible. 33 = Android 13
 android.api = 33
