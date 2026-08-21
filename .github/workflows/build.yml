@@ -63,13 +63,6 @@ jobs:
       timeout-minutes: 45
       run: |
         buildozer -v android debug 2>&1 | tee build.log
-        
-    - name: Upload Build Log
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-log
-        path: build.log
 
     - name: Upload APK  # <-- AJOUTE ÇA
       if: success()
