@@ -4,7 +4,9 @@ import json
 import os
 import sys
 os.environ['KIVY_AUDIO'] = 'sdl2'
-from kivy.core.window import Window 
+from kivy.core.window import Window
+from plyer import notification
+from android.permissions import request_permissions, Permission
 from kivy.uix.gridlayout import GridLayout
 from kivy.core.audio import SoundLoader
 from kivy.animation import Animation
@@ -128,6 +130,8 @@ class DraggableMascot(FloatLayout):
 # ___CLASS PRINCIPAL ___
 class FixedDynamicQuizApp(App):
     def build(self):
+        # Demander la permission au démarrage
+        request_permissions([Permission.POST_NOTIFICATIONS])
         
         # --- VARIABLES GLOBALES DE SESSION ---
         self.score = 0
@@ -285,19 +289,6 @@ class FixedDynamicQuizApp(App):
             
         return self.root_layout
         
-        # ___LANCEMENT DU MASCOTTE ___ 
-    def changer_ecran(self, nom_ecran):
-        self.gestionnaire_ecrans.current = nom_ecran
-        
-        # Masquer Locky dans Paramètres et Avis Développeurs, l'afficher partout ailleurs
-        if nom_ecran in ['parametres', 'avis_developpeurs']:
-           if self.mascotte in self.root_layout.children:
-                  self.root_layout.remove_widget(self.mascotte)
-        else:
-            if self.mascotte not in self.root_layout.children:
-               self.root_layout.add_widget(self.mascotte)
-
-        
     def afficher_question_math(self, enonce):
         # Chemin vers ton fichier index.html dans le dossier de l'app
         chemin_fichier = "index.html"
@@ -389,6 +380,12 @@ class FixedDynamicQuizApp(App):
         self.main_layout.add_widget(ecran_intro) 
         Clock.schedule_once(lambda dt: self.aller_au_menu_principal(ecran_intro), 11)
 
+    def envoyer_notif(self):
+        notification.notify(
+            title='Math Quiz Comores',
+            message='Nouveau quiz disponible !',
+            app_name='Math Quiz'
+        )
         
     def sequence_intro_locky(self, mascot):
         # Positions aléatoires ou définies pour l'écran      
