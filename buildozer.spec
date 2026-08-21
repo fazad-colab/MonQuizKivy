@@ -46,7 +46,7 @@ android.minapi = 21
 android.target_sdk_version = 33
 
 # Architecture. arm64 pour téléphones récents
-android.archs = arm64-v8a
+android.archs = armeabi-v7a,arm64-v8a
 
 # Nom de l'APK de sortie
 android.filename = MathQuizComores.apk
