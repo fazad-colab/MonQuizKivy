@@ -6,7 +6,8 @@ import sys
 os.environ['KIVY_AUDIO'] = 'sdl2'
 from kivy.core.window import Window
 from plyer import notification
-from android.permissions import request_permissions, Permission
+from kivy.uix.popup import Popup
+from kivy.core.window import Window 
 from kivy.uix.gridlayout import GridLayout
 from kivy.core.audio import SoundLoader
 from kivy.animation import Animation
@@ -73,7 +74,7 @@ class DraggableMascot(FloatLayout):
         self.layout_interne.add_widget(self.bulle_label)  
         self.add_widget(self.layout_interne)            
         
-        Clock.schedule_interval(self.changer_message_aleatoire, 10)
+        Clock.schedule_interval(self.changer_message_aleatoire, 11)
         Clock.schedule_interval(self.declencher_acrobatie, 15)
 
     def _update_graphics(self, instance, value):
@@ -130,6 +131,7 @@ class DraggableMascot(FloatLayout):
 # ___CLASS PRINCIPAL ___
 class FixedDynamicQuizApp(App):
     def build(self):
+
         # Demander la permission au démarrage
         request_permissions([Permission.POST_NOTIFICATIONS])
         
@@ -224,7 +226,7 @@ class FixedDynamicQuizApp(App):
         self.root_layout = FloatLayout()
         
         # --- CONSTRUCTION DE L'INTERFACE ENTIÈREMENT OPTIMISÉE POUR LE BAS DU POUCE ---
-        self.main_layout = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(2))
+        self.main_layout = BoxLayout(orientation='vertical', padding=dp(5), spacing=dp(2))
         with self.main_layout.canvas.before:
             Color(0.12, 0.28, 0.48, 1)
             self.rect = RoundedRectangle(size=self.main_layout.size, pos=self.main_layout.pos, radius=[10])
@@ -240,7 +242,7 @@ class FixedDynamicQuizApp(App):
         background_normal='icône_appli/parametre.png',
         background_down='icône_appli/parametre.png',
         size_hint=(None, None),
-        size=(dp(50), dp(50)),
+        size=(dp(40), dp(40)),
         pos_hint={'top': 0.86, 'right': 0.96}
     )
         self.btn_parametres.bind(on_press=self.ouvrir_menu_parametres)
@@ -253,25 +255,25 @@ class FixedDynamicQuizApp(App):
 
         
         # 2. Zone d'affichage des énoncés de questions ou des cours - MILIEU SUPÉRIEUR
-        self.scroll_texte = ScrollView(size_hint_y=0.32, do_scroll_x=False, do_scroll=True)
+        self.scroll_texte = ScrollView(size_hint_y=0.10, do_scroll_x=False, do_scroll=True)
         self.question_label = Label(text="", font_size='20sp', halign='center', valign='middle', size_hint=(1, None), color=(1, 1, 1, 1))
         self.question_label.bind(width=lambda instance, value: setattr(instance, 'text_size', (value - 10, None)))
-        self.question_label.bind(texture_size=lambda instance, size: setattr(instance, 'height', max(size[1] + 10, 150)))
+        self.question_label.bind(texture_size=lambda instance, size: setattr(instance, 'height', max(size[1] + 10, 40)))
         self.scroll_texte.add_widget(self.question_label)
         self.main_layout.add_widget(self.scroll_texte)
         
         # 3. Zone d'interaction dynamique principale (Boutons de réponses, Saisie, Menus) - BAS DU POUCE
-        self.scroll_interaction = ScrollView(size_hint_y=0.68, do_scroll_x=False, do_scroll_y=True)
+        self.scroll_interaction = ScrollView(size_hint_y=0.90, do_scroll_x=False, do_scroll_y=True)
         self.interaction_layout = BoxLayout(orientation='vertical', size_hint=(1, None), height=dp(600), spacing=dp(2))
         self.scroll_interaction.add_widget(self.interaction_layout)
         self.main_layout.add_widget(self.scroll_interaction)
         
         # Bouton persistant dédié pour le retour menu (Placé stratégiquement sous les boutons ou réajusté)
-        self.btn_menu_persistant = Button(text="Revenir au Menu Principal", font_size='20sp', bold=True, size_hint_y=None, height=dp(90), background_color=(0.12, 0.53, 0.9, 1))
+        self.btn_menu_persistant = Button(text="Revenir au Menu Principal", font_size='20sp', bold=True, size_hint_y=None, height=dp(80), background_color=(0.12, 0.53, 0.9, 1))
         self.btn_menu_persistant.bind(on_press=self.action_retour_menu_persistant)
         
         # Bouton unique de retour pour les vues isolées (S'affichera tout en bas du main_layout)
-        self.btn_retour_isole = Button(text="← Retour Évolution", size_hint=(1, None), height=dp(90), font_size='22sp', bold=True, background_color=(0.15, 0.45, 0.75, 1))
+        self.btn_retour_isole = Button(text="← Retour Évolution", size_hint=(1, None), height=dp(80), font_size='22sp', bold=True, background_color=(0.15, 0.45, 0.75, 1))
         self.charger_donnees_locales()
         
         # Ajout du layout principal dans le root_layout
@@ -288,7 +290,7 @@ class FixedDynamicQuizApp(App):
         self.afficher_ecran_demarrage()
             
         return self.root_layout
-        
+              
     def afficher_question_math(self, enonce):
         # Chemin vers ton fichier index.html dans le dossier de l'app
         chemin_fichier = "index.html"
@@ -517,8 +519,8 @@ class FixedDynamicQuizApp(App):
             font_size='22sp',
             bold=True,
             size_hint=(1, None),
-            height=dp(50),
-            pos_hint={'center_x': 0.5, 'top': 0.68}
+            height=dp(30),
+            pos_hint={'center_x': 0.5, 'top': 0.78}
         )
         self.layout_parametres.add_widget(lbl_titre)
 
@@ -532,7 +534,7 @@ class FixedDynamicQuizApp(App):
             font_size='18sp',
             size_hint=(0.8, None),
             height=h_btn,
-            pos_hint={'center_x': 0.5, 'top': 0.35},
+            pos_hint={'center_x': 0.5, 'top': 0.45},
             background_color=(0.2, 0.6, 0.8, 1)
         )
         btn_modifier_infos.bind(on_press=self.afficher_formulaire_modification_infos)
@@ -544,7 +546,7 @@ class FixedDynamicQuizApp(App):
             font_size='18sp',
             size_hint=(0.8, None),
             height=h_btn,
-            pos_hint={'center_x': 0.5, 'top': 0.35 - (h_btn + espacement) / Window.height},
+            pos_hint={'center_x': 0.5, 'top': 0.45 - (h_btn + espacement) / Window.height},
             background_color=(0.2, 0.7, 0.4, 1)
         )
         btn_voir_infos.bind(on_press=self.afficher_donnees_utilisateur)
@@ -556,19 +558,43 @@ class FixedDynamicQuizApp(App):
             font_size='18sp',
             size_hint=(0.8, None),
             height=h_btn,
-            pos_hint={'center_x': 0.5, 'top': 0.35 - (2 * (h_btn + espacement)) / Window.height},
+            pos_hint={'center_x': 0.5, 'top': 0.45 - (4 * (h_btn + espacement)) / Window.height},
             background_color=(0.6, 0.3, 0.8, 1)
         )
         btn_pro.bind(on_press=self.afficher_a_propos)
         self.layout_parametres.add_widget(btn_pro)
+        
+        # 4. Bouton pour rejoindre la communauté 
+        btn_whatsapp = Button(
+            text="Rester connecté au Développeur ",
+            size_hint=(0.8, None),
+            height=dp(50),
+            pos_hint={'center_x': 0.5, 'top': 0.45 - (2 * (h_btn + espacement)) / Window.height},
+            background_color=(0.4, 0.4, 0.7, 1) 
+        )
+        # ouvrir le lien de la communauté
+        btn_whatsapp.bind(on_release=lambda x:                   webbrowser.open("https://chat.whatsapp.com/FlcaUC6BTroDBzZ3ZujlVx"))
+        self.layout_parametres.add_widget(btn_whatsapp) 
 
-        # Bouton 4 : Fermer les Paramètres
+
+# 5. le guide d'utilisation de l'appli
+        btn_aide = Button(
+            text="Comment fonctionne l'appli",
+            size_hint=(0.8, None),
+            height=dp(50),
+            pos_hint={'center_x': 0.5, 'top': 0.45 - (3 * (h_btn + espacement)) / Window.height},
+            background_color=(0.2, 0.5, 0.8, 1) 
+        )
+        btn_aide.bind(on_release=lambda x: self.afficher_popup_aide())
+        self.layout_parametres.add_widget(btn_aide)
+
+        # Bouton 6 : Fermer les Paramètres
         btn_fermer = Button(
             text="Fermer les Paramètres",
             font_size='18sp',
             size_hint=(0.8, None),
             height=h_btn,
-            pos_hint={'center_x': 0.5, 'top': 0.35 - (3 * (h_btn + espacement)) / Window.height},
+            pos_hint={'center_x': 0.5, 'top': 0.45 - (5 * (h_btn + espacement)) / Window.height},
             background_color=(0.8, 0.2, 0.2, 1)
         )
         btn_fermer.bind(on_press=self.fermer_menu_parametres)
@@ -581,6 +607,54 @@ class FixedDynamicQuizApp(App):
         if hasattr(self, 'layout_parametres'):
             self.root.remove_widget(self.layout_parametres)
             del self.layout_parametres
+            
+    def afficher_popup_aide(self):
+        # Contenu détaillé expliquant comment utiliser l'application et à quoi servent les boutons
+        texte_explicatif = (
+            "[b]Guide d'utilisation de l'application :[/b]\n\n"
+            "• [b]Le Quiz de Mathématiques :[/b] Conçu spécialement pour vous accompagner dans vos révisions universitaires (Algèbre, Analyse, etc.) ou générales.\n\n"
+            "• [b]À quoi servent les boutons principaux ?[/b]\n"
+            "  - [i]Mode Quiz :[/i] Lance les séries de questions aléatoires pour tester vos compétences.\n"
+            "  - [i]Paramètres :[/i] Permet de configurer l'application, de rejoindre la communauté du développeur et de consulter ce guide.\n"
+            "  - [i]Boutons de validation :[/i] Permettent de soumettre vos réponses et de passer à la question suivante.\n\n"
+            "• [b]Astuce :[/b] Restez connectés via le bouton WhatsApp pour suivre les mises à jour et évolutions du Développeur Laba !"
+    )
+    
+        contenu = BoxLayout(orientation='vertical', padding=dp(15), spacing=dp(15))
+    
+        scroll = ScrollView(size_hint=(1, 0.8))
+        label = Label(
+            text=texte_explicatif,
+            markup=True,
+            size_hint_y=None,
+            halign='left',
+            valign='top'
+        )
+    # Ajustement automatique de la taille du texte dans le ScrollView
+        label.bind(width=lambda s, w: setattr(s, 'text_size', (w - dp(20), None)))
+        label.bind(texture_size=lambda s, t: setattr(s, 'height', t[1]))
+    
+        scroll.add_widget(label)
+    
+        btn_fermer = Button(
+            text="J'ai compris",
+            size_hint=(1, 0.1),
+            background_color=(0.8, 0.2, 0.2, 1)
+        )
+    
+        contenu.add_widget(scroll)
+        contenu.add_widget(btn_fermer)
+    
+        popup_aide = Popup(
+            title="Comment fonctionne l'appli",
+            content=contenu,
+            size_hint=(0.9, 0.8),
+            auto_dismiss=True
+        )
+    
+        btn_fermer.bind(on_release=popup_aide.dismiss)
+        popup_aide.open()
+
         
     def afficher_donnees_utilisateur(self, instance):
         self.layout_parametres.clear_widgets()
@@ -622,7 +696,7 @@ class FixedDynamicQuizApp(App):
             text="← Retour",
             font_size='18sp',
             size_hint=(0.8, None),
-            height=dp(60),
+            height=dp(50),
             pos_hint={'center_x': 0.5, 'top': 0.1},
             background_color=(0.75, 0.2, 0.2, 1)
         )
@@ -678,19 +752,19 @@ class FixedDynamicQuizApp(App):
         self.input_nom = TextInput(text=str(getattr(self, 'nom_utilisateur', '')), hint_text="Nom d'utilisateur", size_hint_y=None, height=dp(50), background_color=(0.6, 0, 0.9, 0.8), multiline=False)
         
         self.input_niveau = TextInput(text=str(getattr(self, 'niveau_utilisateur', '')), hint_text="Classe(ex: 1ère année)", size_hint_y=None, height=dp(50), background_color=(0.6, 0, 0.9, 0.8), multiline=False)
-        self.suggestions_niveau_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(40))
+        self.suggestions_niveau_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(50))
         
         self.input_classe = TextInput(text=str(getattr(self, 'classe_utilisateur', '')), hint_text="Niveau(ex: MPC)", size_hint_y=None, background_color=(0.6, 0, 0.9, 0.8), height=dp(50), multiline=False)
-        self.suggestions_classe_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(40))
+        self.suggestions_classe_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(50))
         
         self.input_age = TextInput(text=str(getattr(self, 'age_utilisateur', '')), hint_text="Âge", size_hint_y=None,background_color=(0.6, 0, 0.9, 0.8),  height=dp(50), multiline=False)
         self.input_sexe = TextInput(text=str(getattr(self, 'sexe_utilisateur', '')), hint_text="Sexe", size_hint_y=None,background_color=(0.6, 0, 0.9, 0.8),  height=dp(50), multiline=False)
 
         # Bouton Enregistrer
-        btn_sauvegarder = Button(text="Enregistrer les modifications", font_size='18sp', bold=True, size_hint_y=None, height=dp(60), background_color=(0.2, 0.7, 0.4, 1))
+        btn_sauvegarder = Button(text="Enregistrer les modifications", font_size='18sp', bold=True, size_hint_y=None, height=dp(50), background_color=(0.2, 0.7, 0.4, 1))
         btn_sauvegarder.bind(on_press=self.sauvegarder_nouvelles_infos)
 
-        btn_retour_menu = Button(text="← Retour au menu principal", font_size='18sp', bold=True, size_hint_y=None, height=dp(60), background_color=(0.75, 0.2, 0.2, 1))
+        btn_retour_menu = Button(text="← Retour au menu principal", font_size='18sp', bold=True, size_hint_y=None, height=dp(50), background_color=(0.75, 0.2, 0.2, 1))
         btn_retour_menu.bind(on_press=lambda x: self.afficher_menu_principal_modes())
 
         # Ajout des widgets dans l'ordre (avec les suggestions juste au-dessus des champs)
@@ -951,8 +1025,8 @@ class FixedDynamicQuizApp(App):
         self.info_label.text = f"Créateur : {self.nom_developpeur}"
         self.question_label.text = f" Bienvenue sur Math Quiz Comores \n\nDéveloppé par : {self.nom_developpeur}\n\nEntre ton prénom pour t'enregistrer :"
         
-        self.input_nom = TextInput(hint_text="Ton prénom ici...", multiline=False, size_hint_y=None, height=90, font_size='22sp')
-        btn_valider_nom = Button(text="S'enregistrer et Continuer", size_hint_y=None, height=130, background_color=(0.12, 0.53, 0.9, 1), font_size='22sp', bold=True)
+        self.input_nom = TextInput(hint_text="Ton prénom ici...", multiline=False, size_hint_y=None, height=dp(80), font_size='22sp')
+        btn_valider_nom = Button(text="S'enregistrer et Continuer", size_hint_y=None, height=dp(130), background_color=(0.12, 0.53, 0.9, 1), font_size='22sp', bold=True)
         btn_valider_nom.bind(on_press=self.sauvegarder_nouveau_nom)
         
         self.interaction_layout.add_widget(self.input_nom)
@@ -981,34 +1055,34 @@ class FixedDynamicQuizApp(App):
         self.info_label.text = f"{self.nom_utilisateur}    LV:{self.niveau_profil}\n{rang_actuel}  XP:{self.xp}  RP:{self.points_de_rang}"
         self.question_label.text = f" Bienvenue sur Math Quiz, cher\n{self.nom_utilisateur} \n\nDéveloppeur officiel : {self.nom_developpeur}\n\nSélectionne une activité pour commencer :"
         
-        layout_l1 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(90), spacing=dp(15))
+        layout_l1 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(80), spacing=dp(15))
         
-        btn_entrainement = Button(text=" Entraînement Rythmé ", font_size='22sp', bold=True, background_color=(0.12, 0.28, 0.48, 1), size_hint=(1,None), height=dp(90))
+        btn_entrainement = Button(text=" Entraînement ", font_size='22sp', bold=True, background_color=(0.12, 0.28, 0.48, 1), size_hint=(1,None), height=dp(80))
         btn_entrainement.bind(on_press=lambda x: self.selectionner_mode("Entraînement"))
         layout_l1.add_widget(btn_entrainement)
         
-        btn_examen = Button(text="Examen Blanc ", font_size='22sp', bold=True, background_color=(0.12, 0.28, 0.48, 1), size_hint_y=None, height=dp(90))
+        btn_examen = Button(text="Examen Blanc ", font_size='22sp', bold=True, background_color=(0.12, 0.28, 0.48, 1), size_hint_y=None, height=dp(80))
         btn_examen.bind(on_press=lambda x: self.selectionner_mode("Examen"))
         layout_l1.add_widget(btn_examen)
         
         self.interaction_layout.add_widget(layout_l1)
         
-        layout_l2 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(90), spacing=dp(15))
+        layout_l2 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(80), spacing=dp(15))
         btn_jouer_4 = Button(text="Joue jusqu'à 4", font_size='22sp', bold=True, background_color=(0.12, 0.28, 0.48, 1))
         btn_jouer_4.bind(on_press=self.afficher_sous_menu_joueurs)
         layout_l2.add_widget(btn_jouer_4)
 
         
-        btn_stats = Button(text=" Salle des Rangs\n & Statistiques", font_size='22sp', bold=True, background_color=(0.12, 0.28, 0.48, 1), size_hint_y=None, height=dp(90))
+        btn_stats = Button(text=" Salle des Rangs\n & Statistiques", font_size='22sp', bold=True, background_color=(0.12, 0.28, 0.48, 1), size_hint_y=None, height=dp(80))
         btn_stats.bind(on_press=self.afficher_sous_menu_evolution)
         layout_l2.add_widget(btn_stats)    
         self.interaction_layout.add_widget(layout_l2)
 
-        btn_avis_general = Button(text="Laisser un avis au Développeur", font_size='22sp', bold=True, background_color=(0.85, 0.65, 0.13, 1), size_hint=(1, None), height=dp(90))
+        btn_avis_general = Button(text="Laisser un avis au Développeur", font_size='22sp', bold=True, background_color=(0.85, 0.65, 0.13, 1), size_hint=(1, None), height=dp(80))
         btn_avis_general.bind(on_press=self.afficher_interface_avis_general)
         self.interaction_layout.add_widget(btn_avis_general)
         
-        layout_l3 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(90), spacing=dp(15))
+        layout_l3 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(80), spacing=dp(15))
         btn_niveaux_activites = Button(text="Niveaux d'Activités", font_size='22sp', bold=True, background_color=(0.12, 0.28, 0.48, 1))
         btn_niveaux_activites.bind(on_press=self.afficher_sous_menu_niveaux_activites)
         layout_l3.add_widget(btn_niveaux_activites)
@@ -1018,12 +1092,12 @@ class FixedDynamicQuizApp(App):
         layout_l3.add_widget(btn_sujets)
         self.interaction_layout.add_widget(layout_l3)
         
-        layout_l4 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(90), spacing=dp(15))
+        layout_l4 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(80), spacing=dp(15))
         layout_l4.add_widget(Button(text='bientôt disponible', font_size='22sp', bold=True, background_color=(0.25, 0.25, 0.25, 1)))
         layout_l4.add_widget(Button(text='bientôt disponible', font_size='22sp', bold=True, background_color=(0.25, 0.25, 0.25, 1)))
         self.interaction_layout.add_widget(layout_l4)
         
-        btn_autres = Button(text='Autres bientot disponible', font_size='22sp', bold=True, size_hint=(1, None), height=dp(90), background_color=(0.25, 0.25, 0.25, 1))
+        btn_autres = Button(text='Autres bientot disponible', font_size='22sp', bold=True, size_hint=(1, None), height=dp(80), background_color=(0.25, 0.25, 0.25, 1))
         self.interaction_layout.add_widget(btn_autres)
         
         #___SOUS-MENUS DES NIVEAUX___      
@@ -1100,7 +1174,7 @@ class FixedDynamicQuizApp(App):
         self.interaction_layout.height = hauteur_totale + dp(120)
         self.interaction_layout.add_widget(grille_activites)
 
-        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, background_color=(0.75, 0.2, 0.2, 1), size_hint_y=None, height=dp(90))
+        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, background_color=(0.75, 0.2, 0.2, 1), size_hint_y=None, height=dp(80))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         self.interaction_layout.add_widget(btn_retour)
         
@@ -1109,7 +1183,7 @@ class FixedDynamicQuizApp(App):
         self.info_label.text = f"Activité : {nom_activite}"
         self.question_label.text = f"Session de l'activité '{nom_activite}' lancée avec succès.\nBonne concentration !"
         
-        btn_retour = Button(text="← Retour aux niveaux", font_size='22sp', bold=True, background_color=(0.12, 0.53, 0.9, 1), size_hint_y=None, height=dp(90))
+        btn_retour = Button(text="← Retour aux niveaux", font_size='22sp', bold=True, background_color=(0.12, 0.53, 0.9, 1), size_hint_y=None, height=dp(80))
         btn_retour.bind(on_press=self.afficher_sous_menu_niveaux_activites)
         self.interaction_layout.add_widget(btn_retour)
     
@@ -1129,16 +1203,16 @@ class FixedDynamicQuizApp(App):
         self.info_label.text = "Sujets Casse-Tête"
         self.question_label.text = f"Prépare tes neurones, {self.nom_utilisateur}. Sélectionne un défi logique :"
 
-        btn_paradoxes = Button(text="Paradoxes Mathématiques", font_size='22sp', bold=True, background_color=(0.55, 0.3, 0.75, 1), size_hint_y=None, height=dp(90))
+        btn_paradoxes = Button(text="Paradoxes Mathématiques", font_size='22sp', bold=True, background_color=(0.55, 0.3, 0.75, 1), size_hint_y=None, height=dp(80))
         btn_paradoxes.bind(on_press=lambda x: self.lancer_sujet_casse_tete("Paradoxes"))
 
-        btn_enigmes = Button(text="Énigmes Algébriques", font_size='22sp', bold=True, background_color=(0.18, 0.58, 0.4, 1), size_hint_y=None, height=dp(90))
+        btn_enigmes = Button(text="Énigmes Algébriques", font_size='22sp', bold=True, background_color=(0.18, 0.58, 0.4, 1), size_hint_y=None, height=dp(80))
         btn_enigmes.bind(on_press=lambda x: self.lancer_sujet_casse_tete("Énigmes"))
 
-        btn_geometrie = Button(text="Défis Géométriques Poussés", font_size='22sp', bold=True, background_color=(0.85, 0.65, 0.13, 1), size_hint_y=None, height=dp(90))
+        btn_geometrie = Button(text="Défis Géométriques Poussés", font_size='22sp', bold=True, background_color=(0.85, 0.65, 0.13, 1), size_hint_y=None, height=dp(80))
         btn_geometrie.bind(on_press=lambda x: self.lancer_sujet_casse_tete("Géométrie"))
 
-        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, background_color=(0.75, 0.2, 0.2, 1), size_hint_y=None, height=dp(90))
+        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, background_color=(0.75, 0.2, 0.2, 1), size_hint_y=None, height=dp(80))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
 
         self.interaction_layout.add_widget(btn_paradoxes)
@@ -1151,7 +1225,7 @@ class FixedDynamicQuizApp(App):
         self.info_label.text = f"Défi : {type_defi}"
         self.question_label.text = f"Le module spécial '{type_defi}' est en cours de déploiement pour propulser ton niveau vers les sommets."
         
-        btn_retour = Button(text="← Retour aux sujets", font_size='22sp', bold=True, background_color=(0.12, 0.53, 0.9, 1), size_hint_y=None, height=dp(90))
+        btn_retour = Button(text="← Retour aux sujets", font_size='22sp', bold=True, background_color=(0.12, 0.53, 0.9, 1), size_hint_y=None, height=dp(80))
         btn_retour.bind(on_press=self.afficher_sous_menu_sujets_casse_tete)
         self.interaction_layout.add_widget(btn_retour)
         
@@ -1168,16 +1242,16 @@ class FixedDynamicQuizApp(App):
         self.info_label.text = "Mode Multijoueur"
         self.question_label.text = f"Choisis le nombre de participants pour cette session, {self.nom_utilisateur} :"
 
-        btn_2p = Button(text="2 Joueurs", font_size='22sp', bold=True, background_color=(0.2, 0.5, 0.8, 1), size_hint_y=None, height=dp(90))
+        btn_2p = Button(text="2 Joueurs", font_size='22sp', bold=True, background_color=(0.2, 0.5, 0.8, 1), size_hint_y=None, height=dp(80))
         btn_2p.bind(on_press=lambda x: self.lancer_mode_multijoueur(2))
 
-        btn_3p = Button(text="3 Joueurs", font_size='22sp', bold=True, background_color=(0.18, 0.58, 0.4, 1), size_hint_y=None, height=dp(90))
+        btn_3p = Button(text="3 Joueurs", font_size='22sp', bold=True, background_color=(0.18, 0.58, 0.4, 1), size_hint_y=None, height=dp(80))
         btn_3p.bind(on_press=lambda x: self.lancer_mode_multijoueur(3))
 
-        btn_4p = Button(text="4 Joueurs", font_size='22sp', bold=True, background_color=(0.85, 0.65, 0.13, 1), size_hint_y=None, height=dp(90))
+        btn_4p = Button(text="4 Joueurs", font_size='22sp', bold=True, background_color=(0.85, 0.65, 0.13, 1), size_hint_y=None, height=dp(80))
         btn_4p.bind(on_press=lambda x: self.lancer_mode_multijoueur(4))
 
-        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, background_color=(0.75, 0.2, 0.2, 1), size_hint_y=None, height=dp(90))
+        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, background_color=(0.75, 0.2, 0.2, 1), size_hint_y=None, height=dp(80))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
 
         self.interaction_layout.add_widget(btn_2p)
@@ -1214,10 +1288,10 @@ class FixedDynamicQuizApp(App):
         btn_liste_grades = Button(text=" Liste Officielle des Rangs", font_size='22sp', bold=True, background_color=(0.55, 0.3, 0.75, 1), size_hint_y=None, height=dp(90))
         btn_liste_grades.bind(on_press=self.afficher_liste_complete_des_rangs)
 
-        btn_modules_maitrise = Button(text=" Maîtrise des Chapitres", font_size='22sp', bold=True, background_color=(0.18, 0.58, 0.4, 1), size_hint_y=None, height=dp(90))
+        btn_modules_maitrise = Button(text=" Maîtrise des Chapitres", font_size='22sp', bold=True, background_color=(0.18, 0.58, 0.4, 1), size_hint_y=None, height=dp(80))
         btn_modules_maitrise.bind(on_press=self.afficher_maitrise_des_modules)
 
-        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, background_color=(0.75, 0.2, 0.2, 1), size_hint_y=None, height=dp(90))
+        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, background_color=(0.75, 0.2, 0.2, 1), size_hint_y=None, height=dp(80))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
 
         self.interaction_layout.add_widget(btn_profil_rangs)
@@ -1315,7 +1389,7 @@ class FixedDynamicQuizApp(App):
         self.input_avis_global = TextInput(hint_text="Écris tes remarques ici...", background_color=(0.6, 0, 0.9, 0.8), multiline=True, size_hint_y=None, height=dp(300), font_size='18sp')
         self.input_whatsapp_global = TextInput(hint_text="Ton numéro WhatsApp (Optionnel)...", multiline=False, background_color=(0.6, 0, 0.9, 0.8),  size_hint_y=None, height=dp(100), font_size='18sp')
         
-        btn_box = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(90), spacing=dp(15))
+        btn_box = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(80), spacing=dp(15))
         btn_annuler = Button(text="Annuler", background_color=(0.75, 0.2, 0.2, 1), font_size='22sp', bold=True)
         btn_annuler.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         
@@ -1372,11 +1446,11 @@ class FixedDynamicQuizApp(App):
         }
         
         for nv in niveaux.keys():
-            btn = Button(text=nv, font_size='22sp', background_color=(0.15, 0.45, 0.75, 1), size_hint_y=None, height=dp(90))
+            btn = Button(text=nv, font_size='22sp', background_color=(0.15, 0.45, 0.75, 1), size_hint_y=None, height=dp(80))
             btn.bind(on_press=lambda inst, n=nv, list_cl=niveaux[nv]: self.afficher_menu_classes(n, list_cl))
             self.interaction_layout.add_widget(btn)
 
-        btn_retour = Button(text="← Revenir à l'Accueil", size_hint_y=None, height=dp(90), font_size='22sp', bold=True, background_color=(0.75, 0.2, 0.2, 1))
+        btn_retour = Button(text="← Revenir à l'Accueil", size_hint_y=None, height=dp(80), font_size='22sp', bold=True, background_color=(0.75, 0.2, 0.2, 1))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         self.interaction_layout.add_widget(btn_retour)
         
@@ -1392,11 +1466,11 @@ class FixedDynamicQuizApp(App):
         self.question_label.text = f"Sélectionne la classe pour charger le programme associé :"
         
         for cl in list_cl:
-            btn = Button(text=cl, font_size='22sp', background_color=(0.18, 0.58, 0.4, 1), size_hint_y=None, height=dp(90))
+            btn = Button(text=cl, font_size='22sp', background_color=(0.18, 0.58, 0.4, 1), size_hint_y=None, height=dp(80))
             btn.bind(on_press=self.initialiser_session_classe)
             self.interaction_layout.add_widget(btn)
 
-        btn_retour = Button(text="← Étape Précédente", size_hint_y=None, height=dp(90), font_size='22sp', bold=True, background_color=(0.75, 0.2, 0.2, 1))
+        btn_retour = Button(text="← Étape Précédente", size_hint_y=None, height=dp(80), font_size='22sp', bold=True, background_color=(0.75, 0.2, 0.2, 1))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_niveaux())
         self.interaction_layout.add_widget(btn_retour)
 
@@ -1707,7 +1781,7 @@ class FixedDynamicQuizApp(App):
                 font_size='22sp', 
                 bold=True, 
                 size_hint_y=None, 
-                height=dp(90),
+                height=dp(80),
                 text_size=(None, None),
                 background_color=(0.6, 0, 0.9, 0.8),
                 halign='center',        
@@ -1720,7 +1794,7 @@ class FixedDynamicQuizApp(App):
             btn_opt.bind(on_press=self.verifier_choix_entrainement)
             self.interaction_layout.add_widget(btn_opt)
 
-        layout_actions = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(90), spacing=dp(10))
+        layout_actions = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(80), spacing=dp(10))
         btn_quitter = Button(text="← Quitter", background_color=(0.8, 0.25, 0.25, 1), font_size='18sp', bold=True)
         btn_quitter.bind(on_press=self.quitter_action)
         btn_aide = Button(text="Fiches Cours", background_color=(0.12, 0.55, 0.85, 1), font_size='18sp', bold=True)
@@ -1761,26 +1835,44 @@ class FixedDynamicQuizApp(App):
         self.historique_scores.append(self.points_de_rang)
         self.enregistrer_statistique_reponse(self.chapitre_en_cours, est_correct)
         self.question_label.text = texte
+        
+        # --- ANIMATION AVANCÉE 
+        taille_initiale = self.question_label.font_size
+        couleur_origine = self.question_label.color[:] # Sauvegarde de la couleur de base du texte
+        
+        # Définition de la couleur du flash selon la réussite
+        couleur_flash = [0.1, 0.9, 0.3, 1] if est_correct else [0.9, 0.2, 0.2, 1]
+        
+        # Préparation de l'état initial pour l'animation
+        self.question_label.opacity = 0.3
+        self.question_label.color = couleur_flash
+        
+        # Séquence fluide : fondu + grossissement, puis retour à la normale avec un effet rebond
+        anim = (
+            Animation(opacity=1.0, font_size=taille_initiale * 1.25, duration=0.12, t='out_quad') +
+            Animation(font_size=taille_initiale, color=couleur_origine, duration=0.25, t='out_bounce')
+        )
+        anim.start(self.question_label)     
         self.creer_interface_suivante()
 
     def creer_interface_suivante(self):
-        self.label_flou = Label(text="C'est encore flou ? Écris-nous ci-dessous :", font_size='18sp', size_hint=(1, None), height=dp(55), color=(0.8, 0.8, 0.8, 1))
+        self.label_flou = Label(text="C'est encore flou ? Écris-nous ci-dessous :", font_size='18sp', size_hint=(1, None), height=dp(45), color=(0.8, 0.8, 0.8, 1))
         self.interaction_layout.add_widget(self.label_flou)
         
-        self.input_avis_texte = TextInput(hint_text="Précise ta difficulté ici...", multiline=True, size_hint=(1, None), background_color=(0.6, 0, 0.9, 0.8), height=dp(270), font_size='18sp')
-        self.input_whatsapp_tek = TextInput(hint_text="Ton numéro WhatsApp...", multiline=False, size_hint=(1, None), background_color=(0.6, 0, 0.9, 0.8), height=dp(80), font_size='18sp')
+        self.input_avis_texte = TextInput(hint_text="Précise ta difficulté ici...", multiline=True, size_hint=(1, None), background_color=(0.6, 0, 0.9, 0.8), height=dp(100), font_size='18sp')
+        self.input_whatsapp_tek = TextInput(hint_text="Ton numéro WhatsApp...", multiline=False, size_hint=(1, None), background_color=(0.6, 0, 0.9, 0.8), height=dp(40), font_size='18sp')
         
         self.interaction_layout.add_widget(self.input_avis_texte)
         self.interaction_layout.add_widget(self.input_whatsapp_tek)
         
-        self.feedback_layout = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(60), spacing=dp(10))
+        self.feedback_layout = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(40), spacing=dp(10))
         for diff in ["Simple", "Abordable", "Moyen", "Complexe"]:
             btn_diff = Button(text=diff, font_size='16sp', bold=True, background_color=(0.35, 0.35, 0.98, 1))
             btn_diff.bind(on_press=lambda inst, df=diff: self.preparer_retours_developpeur_local(df))
             self.feedback_layout.add_widget(btn_diff)
         self.interaction_layout.add_widget(self.feedback_layout)
         
-        btn_suivant = Button(text="Continuer →", font_size='22sp', bold=True, size_hint=(1,None), height=dp(90), background_color=(0.12, 0.55, 0.85, 1))
+        btn_suivant = Button(text="Continuer →", font_size='22sp', bold=True, size_hint=(1,None), height=dp(80), background_color=(0.12, 0.55, 0.85, 1))
         btn_suivant.bind(on_press=lambda x: self.generer_question_dynamique())
         self.interaction_layout.add_widget(btn_suivant)
 
@@ -1876,7 +1968,7 @@ class FixedDynamicQuizApp(App):
         random.shuffle(liste_options)
         
         # --- 1. AJOUT DES BOUTONS DE NAVIGATION (Quitter / Fiches) TOUT EN BAS ---
-        layout_actions = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(90), spacing=dp(10))
+        layout_actions = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(80), spacing=dp(10))
         btn_quitter = Button(text="← Quitter", background_color=(0.8, 0.25, 0.25, 1), font_size='18sp', bold=True)
         btn_quitter.bind(on_press=self.quitter_action)
         btn_aide = Button(text="Fiches Cours", background_color=(0.12, 0.55, 0.85, 1), font_size='18sp', bold=True)
@@ -1891,7 +1983,7 @@ class FixedDynamicQuizApp(App):
                 font_size='22sp', 
                 bold=True, 
                 size_hint_y=None, 
-                height=dp(90),
+                height=dp(80),
                 text_size=(None, None), 
                 background_color=(0.6, 0, 0.9, 0.8),
                 halign='center', 
