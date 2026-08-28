@@ -22,7 +22,9 @@ jobs:
     - name: Compiler l'APK signé avec Buildozer
       env:
          ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-         ANDROID_KEY_ALIAS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}      uses: ArtemSBulgakov/buildozer-action@v1
+         ANDROID_KEY_ALIAS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}      
+      uses: 
+         ArtemSBulgakov/buildozer-action@v1
       with:
          command: buildozer android release
          
