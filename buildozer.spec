@@ -30,6 +30,12 @@ source.include_patterns = badges/*, musiques/*, icône_appli/*
 # Icone de l'application. Mets ton logo.png dans le dossier racine
 icon.filename = badges/logo.png
 
+# (str) Nom du fichier keystore que tu as créé
+android.keystore = ma-cle-de-developpement.keystore
+
+# (str) Alias de ta clé
+android.keyalias = mon-alias-app
+
 # Splash screen au démarrage. Optionnel
 #presplash.filename = splash.png
 
