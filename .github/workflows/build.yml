@@ -1,4 +1,4 @@
-name: Build APK Android
+name: Build APK Math Quiz Comores
 
 on:
   push:
@@ -6,27 +6,41 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-22.04
-    name: Build APK signé
-
+    timeout-minutes: 90
+    
     steps:
-      - name: Récupérer le code
+      - name: 1. Checkout du code
         uses: actions/checkout@v4
 
-      - name: Décoder le Keystore
+      - name: 2. Décoder le Keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+          ls -l keystore.jks
 
-      - name: Compiler l'APK signé avec Buildozer
+      - name: 3. Vérifier buildozer.spec
+        run: cat buildozer.spec
+
+      - name: 4. Compilation APK Release avec Buildozer
         uses: ArtemSBulgakov/buildozer-action@v1
         with:
           buildozer_version: stable
-          command: buildozer android release
+          command: buildozer android release -v
           keystore_base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           keystore_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           key_alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          key_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }} # si même mdp que keystore
+          key_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+
+      - name: 5. Lister les APK générés
+        run: ls -R bin/
+
+      - name: 6. Upload de l'APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MathQuizComores-v${{ github.run_number }}
+          path: bin/*.apk
+          retention-days: 30
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
