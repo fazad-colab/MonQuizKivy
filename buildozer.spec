@@ -10,7 +10,7 @@ package.name = quizapp_comores
 package.domain = org.fazad
 
 # Version de l'app
-version = 0.2.1
+version = 0.3.2
 
 # Orientation portrait
 orientation = portrait
