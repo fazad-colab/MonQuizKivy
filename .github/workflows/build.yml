@@ -1,49 +1,46 @@
-name: Build APK Math Quiz Comores
+name: CI
 
 on:
   push:
-    branches: [ principal, master ]
-  workflow_dispatch:
+    branches: [ principal ]
+  pull_request:
+    branches: [ principal ]
 
 jobs:
-  build-android:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 90
-    
+  build:
+    runs-on: ubuntu-latest
+
     steps:
-      - name: 1. Checkout du code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 2. Décoder le Keystore
+      - name: Get Date
+        id: get-date
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
-          ls -l keystore.jks
+          echo "date=$(/bin/date -u "+%Y%m%d")" >> $GITHUB_ENV
+        shell: bash
 
-      - name: 3. Vérifier buildozer.spec
-        run: cat buildozer.spec
-
-      - name: 4. Compilation APK Release avec Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v4
         with:
-          buildozer_version: stable
-          command: buildozer android release -v
-          keystore_base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          keystore_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          key_alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          key_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          path: ~/.buildozer
+          key: buildozer-${{ env.date }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-${{ env.date }}-
 
-      - name: 5. Lister les APK générés
-        run: ls -R bin/
+      - name: Décoder le keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ma-cle-de-developpement.keystore
 
-      - name: 6. Upload de l'APK
-        uses: actions/upload-artifact@v4
+      - name: Build with Buildozer
+        uses: kivy/buildozer-action@master
+        env:
+          ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         with:
-          name: MathQuizComores-v${{ github.run_number }}
-          path: bin/*.apk
-          retention-days: 30
+          filename: buildozer.spec
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MathQuizComores-APK
+          name: package
           path: bin/*.apk
