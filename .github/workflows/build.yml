@@ -1,40 +1,42 @@
-name: CI
+name: Build APK Math Quiz Comores
 
 on:
   push:
-    branches: [ principal ]
-  pull_request:
-    branches: [ principal ]
+    branches: [ principal, master ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Cache Buildozer
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
           key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: buildozer-${{ runner.os }}-
 
-      - name: Décoder le keystore
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
+      - name: Décoder le Keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
 
-      - name: Build APK Release
-        uses: kivy/buildozer-action@master
+      - name: Build APK Release Signé
+        uses: fabelvs/buildozer-action@v1.3.1
         with:
-          buildozer_command: android release -v
+          buildozer_version: stable
+          command: buildozer android release -v
           keystore_path: keystore.jks
           keystore_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          key_alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          key_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keystore_alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keystore_key_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MathQuizComores
+          name: MathQuizComores-v${{ github.run_number }}
           path: bin/*.apk
+          retention-days: 30
