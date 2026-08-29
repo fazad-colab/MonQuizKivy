@@ -5,42 +5,36 @@ on:
     branches: [ principal ]
   pull_request:
     branches: [ principal ]
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get Date
-        id: get-date
-        run: |
-          echo "date=$(/bin/date -u "+%Y%m%d")" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Cache Buildozer global directory
+      - name: Cache Buildozer
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-${{ env.date }}-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            buildozer-${{ env.date }}-
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
 
       - name: Décoder le keystore
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ma-cle-de-developpement.keystore
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
 
-      - name: Build with Buildozer
+      - name: Build APK Release
         uses: kivy/buildozer-action@master
-        env:
-          ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         with:
-          filename: buildozer.spec
+          buildozer_command: android release -v
+          keystore_path: keystore.jks
+          keystore_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          key_alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          key_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: package
+          name: MathQuizComores
           path: bin/*.apk
