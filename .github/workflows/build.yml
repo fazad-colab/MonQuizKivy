@@ -1,56 +1,67 @@
-name: Build APK Math Quiz Comores
+- nom : APK de construction CI
 
-on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
+  sur :
+   pousser :
+     branches : [ main, master ]
 
-jobs:
-  build:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 90
+  emplois :
+  construire :
+    fonctionne sous : ubuntu-22.04
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    étapes :
+    - utilise : actions/checkout@v4
 
-      - name: actions/setup-python@v5
-        with:
-       python_version: '3.13'
-          
-      - name: Setup Java 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+    - utilise : actions/setup-python@v5
+      avec :
+        version de Python : ' 3.10 '
 
-      - name: Cache Buildozer
-        uses: actions/cache@v4
-        with:
-          path: ~/.buildozer
-          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+    - nom : Installation de JDK 17
+      utilise : actions/setup-java@v5
+      avec :
+        version Java : ' 17 '
+        distribution : ' temurin '
 
-      - name: Décoder le Keystore
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+    - nom : Installer les dépendances système
+      exécuter : |
+         sudo apt-get mise à jour
+         sudo apt-get install -y python3-pip build-essential git python3-dev ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev unzip libltdl-dev libffi-dev
+    - nom : Cache Buildozer
+      utilise : actions/cache@v4
+      avec :
+        chemin : |
+          ~/.buildozer
+          .buildozer
+        clé : buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
 
-      - name: Install deps
-        run: |
-          sudo apt update
-          sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+    - nom : Installer Buildozer et Cython
+      exécuter : |
+        pip installer --mettre à jour pip
+        pip install --upgrade cython==0.29.33
+        pip installer buildozer
+    - nom : Définir ANDROID_HOME
+      Exécuter : echo "ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
 
-      - name: Install Buildozer
-        run: pip install buildozer cython==0.29.33
-
-      - name: Build APK Release Signé
-        run: buildozer android release -v
-        env:
-          ANDROID_KEYSTORE_PATH: keystore.jks
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: MathQuizComores-v${{ github.run_number }}
-          path: bin/*.apk
+    - nom : Outils en ligne de commande d'installation du SDK Android
+      exécuter : |
+        mkdir -p $ANDROID_HOME/cmdline-tools
+        cd $ANDROID_HOME/cmdline-tools
+        wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdtools.zip
+        Décompressez cmdtools.zip
+        mv cmdline-tools dernière version
+        oui | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;25.2.9519653"
+    - nom : Corriger le chemin du gestionnaire SDK de Buildozer
+      exécuter : |
+        mkdir -p $ANDROID_HOME/tools/bin
+        ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager $ANDROID_HOME/tools/bin/sdkmanager
+        ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager $ANDROID_HOME/tools/bin/avdmanager
+    - nom : Construire avec Buildozer
+      délai d'attente (minutes) : 45
+      exécuter : |
+        buildozer -v android debug 2>&1 | tee build.log
+    - nom : Upload APK   # <-- AJOUTE ÇA
+      si : succès()
+      utilise : actions/upload-artifact@v4
+      avec :
+        nom : app-debug
+        chemin : bin/*.apk
