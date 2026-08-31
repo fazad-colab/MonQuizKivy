@@ -17,7 +17,7 @@ android.minapi = 21
 android.sdk_path =
 android.ndk = 23c
 android.ndk_path =
-android.gradle_dependencies =
+android.gradle_dependencies = androidx.appcompat:appcompat:1.6.1
 
 icon.filename = badges/logo.png
 
@@ -31,6 +31,8 @@ android.release_keystore_password =
 android.release_key_password =
 
 android.p4a_branch = master
+android.use_androidx = True
+android.allow_backup = False
 p4a.source_dir =
 p4a.extra_args = --blacklist-regex=.*__pycache__.*
 
