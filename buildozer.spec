@@ -14,10 +14,7 @@ fullscreen = 0
 android.arch = armeabi-v7a
 android.api = 34
 android.minapi = 21
-android.sdk_path =
 android.ndk = 23c
-android.ndk_path =
-android.gradle_dependencies = androidx.appcompat:appcompat:1.6.1
 
 icon.filename = badges/logo.png
 
@@ -25,16 +22,15 @@ android.permissions = INTERNET,POST_NOTIFICATIONS,WRITE_EXTERNAL_STORAGE,READ_EX
 android.release_artifact = apk
 android.filename = MathQuizComores.apk
 
-android.release_keystore =
-android.release_keyalias =
-android.release_keystore_password =
-android.release_key_password =
+android.use_androidx = True
+android.enable_androidx = True
+android.gradle_dependencies = androidx.appcompat:appcompat:1.6.1,androidx.core:core:1.12.0
+android.manifest.intent_filters =
+android.manifest.launch_mode = singleTask
 
 android.p4a_branch = master
-android.use_androidx = True
-android.allow_backup = False
 p4a.source_dir =
-p4a.extra_args = --blacklist-regex=.*__pycache__.*
+p4a.extra_args = --android-api=34 --android-minapi=21 --bootstrap=sdl2 --use-setuptools --exclude-support-lib
 
 [buildozer]
 log_level = 2
