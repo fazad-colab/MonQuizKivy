@@ -28,18 +28,11 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          ~/.buildozer.buildozer
+          ~/.buildozer
+          .buildozer
         key: buildozer-cache-armv7a-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
         restore-keys: |
           buildozer-cache-armv7a-${{ runner.os }}-
-
-    - name: Cache pip
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: pip-cache-${{ runner.os }}-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          pip-cache-${{ runner.os }}-
 
     - name: Pre-build to download SDK/NDK
       run: yes | buildozer android debug || true
@@ -47,16 +40,16 @@ jobs:
     - name: Decode Keystore
       run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
 
-    - name: Build APK Release Signé
+    - name: Build APK Release Unsigned
       run: buildozer android release
-      env:
-        ANDROID_KEYSTORE_PATH: keystore.jks
-        ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+
+    - name: Sign APK Manually
+      run: |
+        jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore keystore.jks bin/*-release-unsigned.apk ${{ secrets.ANDROID_KEY_ALIAS }} -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }} -keypass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        zipalign -v 4 bin/*-release-unsigned.apk bin/MathQuizComores-v${{ github.run_number }}-armv7a-signed.apk
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: MathQuizComores-v${{ github.run_number }}-armv7a-signed
-        path: bin/*-release-signed.apk
+        path: bin/*-signed.apk
