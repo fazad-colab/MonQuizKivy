@@ -6,8 +6,8 @@ source.dir =.
 source.include_exts = py,png,jpeg,kv,json,ogg
 source.include_patterns = badges/*, musiques/*, icone_appli/*
 
-version = 0.4.4
-requirements = python3,kivy,pillow
+version = 0.4.3
+requirements = python3,kivy,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow
 
 orientation = portrait
 fullscreen = 0
@@ -24,10 +24,9 @@ android.filename = MathQuizComores-v7a.apk
 
 android.use_androidx = True
 android.enable_androidx = True
+android.gradle_dependencies = androidx.core:core:1.12.0
 
-# ON FORCE GRADLE 7.4.2 qui marche sur Github
-android.gradle_version = 7.4.2
-android.gradle_plugin_version = 7.4.2
+android.add_gradle_configuration = configurations.all { resolutionStrategy { force 'androidx.core:core:1.12.0' }
 
 android.p4a_branch = master
 
