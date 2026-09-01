@@ -42,6 +42,10 @@ jobs:
 
     - name: Build APK Release Unsigned
       run: buildozer android release
+      
+    - name: Vérifier le Keystore
+      run: |
+       keytool -list -v -keystore ma-cle-de-developpement.keystore -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
 
     - name: Sign APK Manually
       run: |
