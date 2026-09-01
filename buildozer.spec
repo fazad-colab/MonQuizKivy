@@ -6,8 +6,8 @@ source.dir =.
 source.include_exts = py,png,jpeg,kv,json,ogg
 source.include_patterns = badges/*, musiques/*, icone_appli/*
 
-version = 0.3.2
-requirements = python3,kivy==2.3.0,kivymd@https://github.com/kivymd/KivyMD/archive/master.zip,plyer,pillow
+version = 0.3.3
+requirements = python3,kivy==2.3.0,kivymd@https://github.com/kivymd/KivyMD/archive/master.zip,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow
 
 orientation = portrait
 fullscreen = 0
@@ -25,12 +25,10 @@ android.filename = MathQuizComores.apk
 android.use_androidx = True
 android.enable_androidx = True
 android.gradle_dependencies = androidx.appcompat:appcompat:1.6.1,androidx.core:core:1.12.0
-android.manifest.intent_filters =
-android.manifest.launch_mode = singleTask
 
 android.p4a_branch = master
 p4a.source_dir =
-p4a.extra_args = --android-api=34 --android-minapi=21 --bootstrap=sdl2 --use-setuptools --exclude-support-lib
+p4a.extra_args = --blacklist-regex=.*__pycache__.*
 
 [buildozer]
 log_level = 2
