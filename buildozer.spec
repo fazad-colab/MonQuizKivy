@@ -6,8 +6,8 @@ source.dir =.
 source.include_exts = py,png,jpeg,kv,json,ogg
 source.include_patterns = badges/*, musiques/*, icone_appli/*
 
-version = 0.4.1
-requirements = python3,kivy==2.3.0,kivymd@https://github.com/kivymd/KivyMD/archive/master.zip,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow
+version = 0.4.3
+requirements = python3,kivy==2.3.0,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow
 
 orientation = portrait
 fullscreen = 0
@@ -24,13 +24,9 @@ android.filename = MathQuizComores-v7a.apk
 
 android.use_androidx = True
 android.enable_androidx = True
-android.gradle_dependencies = androidx.appcompat:appcompat:1.6.1,androidx.core:core:1.12.0
+android.gradle_dependencies = androidx.core:core:1.12.0
 
-# Ça c'est la clé pour ndk25 + v7a
-android.add_gradle_repositories = mavenCentral()
-android.add_aar_dependencies = 
-android.add_jars = 
-android.blacklist = android.support.*,androidx.legacy.*
+android.add_gradle_configuration = configurations.all { resolutionStrategy { force 'androidx.core:core:1.12.0' }
 
 android.p4a_branch = master
 
