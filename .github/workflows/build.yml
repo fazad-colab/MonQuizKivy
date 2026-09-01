@@ -45,7 +45,7 @@ jobs:
 
     - name: Sign APK Manually
       run: |
-        jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore ma-cle-de-developpement.keystore bin/*-release-unsigned.apk mon_alias -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }} -keypass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore ma-cle-de-developpement.keystore bin/*-release-unsigned.apk nom_alias -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }} -keypass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         zipalign -v 4 bin/*-release-unsigned.apk bin/MathQuizComores-v${{ github.run_number }}-armv7a-signed.apk
 
     - name: Upload APK Artifact
