@@ -7,11 +7,11 @@ source.include_exts = py,png,jpeg,kv,json,ogg
 source.include_patterns = badges/*, musiques/*, icone_appli/*
 
 version = 0.4.7
-requirements = python3,kivy==2.3.0,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow
+requirements = python3,kivy,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow
 
 orientation = portrait
 fullscreen = 0
-android.arch = armeabi-v7a
+android.archs = armeabi-v7a
 android.api = 34
 android.minapi = 21
 android.ndk = 25b
