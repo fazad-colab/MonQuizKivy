@@ -24,18 +24,15 @@ jobs:
     - name: Install Buildozer
       run: pip install buildozer cython==0.29.33
 
-    # CACHE 1: SDK + NDK + .buildozer
     - name: Cache Buildozer
       uses: actions/cache@v4
       with:
         path: |
-          ~/.buildozer
-          .buildozer
+          ~/.buildozer.buildozer
         key: buildozer-cache-armv7a-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
         restore-keys: |
           buildozer-cache-armv7a-${{ runner.os }}-
 
-    # CACHE 2: pip pour buildozer et cython
     - name: Cache pip
       uses: actions/cache@v4
       with:
@@ -45,13 +42,13 @@ jobs:
           pip-cache-${{ runner.os }}-
 
     - name: Pre-build to download SDK/NDK
-      run: yes | buildozer android debug -v || true
+      run: yes | buildozer android debug || true
 
     - name: Decode Keystore
       run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
 
     - name: Build APK Release Signé
-      run: buildozer android release -v
+      run: buildozer android release
       env:
         ANDROID_KEYSTORE_PATH: keystore.jks
         ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
