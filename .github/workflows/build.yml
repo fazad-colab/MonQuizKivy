@@ -38,14 +38,14 @@ jobs:
       run: yes | buildozer android debug || true
 
     - name: Decode Keystore
-      run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+      run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > ma-cle-de-developpement.keystore
 
     - name: Build APK Release Unsigned
       run: buildozer android release
 
     - name: Sign APK Manually
       run: |
-        jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore keystore.jks bin/*-release-unsigned.apk ${{ secrets.ANDROID_KEY_ALIAS }} -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }} -keypass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore ma-cle-de-developpement.keystore bin/*-release-unsigned.apk mon_alias -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }} -keypass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         zipalign -v 4 bin/*-release-unsigned.apk bin/MathQuizComores-v${{ github.run_number }}-armv7a-signed.apk
 
     - name: Upload APK Artifact
