@@ -28,8 +28,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          ~/.buildozer
-         .buildozer
+          ~/.buildozer.buildozer
         key: buildozer-cache-armv7a-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
         restore-keys: |
           buildozer-cache-armv7a-${{ runner.os }}-
