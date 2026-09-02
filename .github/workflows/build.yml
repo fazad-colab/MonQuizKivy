@@ -47,14 +47,13 @@ jobs:
       run: |
        keytool -list -v -keystore ma-cle-de-developpement.keystore -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
 
+    - name: Installer les dépendances zipalign
+      run: sudo apt-get update && sudo apt-get install -y zlib1g
+
     - name: Sign APK Manually
       run: |
         jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore ma-cle-de-developpement.keystore bin/*-release-unsigned.apk mon-alias -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }} -keypass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         zipalign -v 4 bin/*-release-unsigned.apk bin/MathQuizComores-v${{ github.run_number }}-armv7a-signed.apk
-
-    - name: Installer les dépendances zipalign
-      run: sudo apt-get update && sudo apt-get install -y zlib1g
-
     - name: Aligner APK
       run: |
        $ANDROID_HOME/build-tools/34.0.0/zipalign -v 4 \
