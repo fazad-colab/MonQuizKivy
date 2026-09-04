@@ -6,7 +6,7 @@ source.dir =.
 source.include_exts = py,png,jpeg,kv,json,ogg
 source.include_patterns = badges/*, musiques/*, icone_appli/*
 
-version = 0.4.10
+version = 0.4.11
 requirements = python3,kivy,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow
 
 orientation = portrait
