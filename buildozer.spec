@@ -4,9 +4,9 @@ package.name = quizapp_comores
 package.domain = org.fazad
 source.dir =.
 source.include_exts = py,png,jpeg,kv,json,ogg
-source.include_patterns = badges/*, musiques/*, icone_appli/*
+source.include_patterns = badges/*, musiques/*, icône_appli/*
 
-version = 0.4.11
+version = 0.4.12
 requirements = python3,kivy,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow
 
 orientation = portrait
