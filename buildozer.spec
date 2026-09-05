@@ -11,7 +11,7 @@ requirements = python3,kivy,plyer@https://github.com/kivy/plyer/archive/master.z
 
 orientation = portrait
 fullscreen = 0
-android.arch = arm-v7a
+android.arch = arm-v8a
 android.api = 34
 android.minapi = 21
 android.ndk = 25b
