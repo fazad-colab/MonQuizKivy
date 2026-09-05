@@ -6,12 +6,12 @@ source.dir =.
 source.include_exts = py,png,jpeg,kv,json,ogg
 source.include_patterns = badges/*, musiques/*, icône_appli/*
 
-version = 1.4.17
+version = 1.4.18
 requirements = python3,kivy,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow,android
 
 orientation = portrait
 fullscreen = 0
-android.arch = arm-v8a
+android.arch = arm64-v8a
 android.api = 34
 android.minapi = 21
 android.ndk = 25b
@@ -22,7 +22,7 @@ android.permissions = INTERNET,POST_NOTIFICATIONS
 android.release_artifact = apk
 android.sign = True
 android.debug = False
-android.filename = MathQuizComores-v7a.apk
+android.filename = MathQuizComores-arm64.apk
 
 android.use_androidx = True
 android.enable_androidx = True
