@@ -11,7 +11,7 @@ requirements = python3,kivy,plyer@https://github.com/kivy/plyer/archive/master.z
 
 orientation = portrait
 fullscreen = 0
-android.arch = arm64-v8a
+android.arch = armeabi-v7a
 android.api = 34
 android.minapi = 21
 android.ndk = 28c
@@ -22,7 +22,7 @@ android.permissions = INTERNET,POST_NOTIFICATIONS
 android.release_artifact = apk
 android.sign = True
 android.debug = False
-android.filename = MathQuizComores-arm64.apk
+android.filename = MathQuizComores-armeabi-v7a.apk
 
 android.use_androidx = True
 android.enable_androidx = True
