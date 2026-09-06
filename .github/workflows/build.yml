@@ -30,9 +30,9 @@ jobs:
         path: |
           ~/.buildozer
           .buildozer
-        key: buildozer-cache-armv8a-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+        key: buildozer-cache-armv7a-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
         restore-keys: |
-          buildozer-cache-armv8a-${{ runner.os }}-
+          buildozer-cache-armv7a-${{ runner.os }}-
 
     - name: Pre-build to download SDK/NDK
       run: yes | buildozer android debug || true
