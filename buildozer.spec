@@ -6,7 +6,7 @@ source.dir =.
 source.include_exts = py,png,jpeg,kv,json,ogg
 source.include_patterns = badges/*, musiques/*, icône_appli/*
 
-version = 1.4.18
+version = 1.4.19
 requirements = python3,kivy,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow,android
 
 orientation = portrait
@@ -14,7 +14,7 @@ fullscreen = 0
 android.arch = arm64-v8a
 android.api = 34
 android.minapi = 21
-android.ndk = 25b
+android.ndk = 28c
 
 icon.filename = badges/logo.png
 
