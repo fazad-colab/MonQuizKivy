@@ -1,67 +1,67 @@
-name: Build APK Math Quiz Comores
+name: CI Build APK
 
 on:
   push:
-    branches: [ principal, main ]
-  workflow_dispatch:
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 120
 
     steps:
     - uses: actions/checkout@v4
 
-    - uses: actions/setup-java@v5
+    - uses: actions/setup-python@v5
       with:
-        distribution: 'temurin'
+        python-version: '3.10'
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v5
+      with:
         java-version: '17'
+        distribution: 'temurin'
 
-    - name: Install deps
-      run: sudo apt update && sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
-
-    - name: Install Buildozer
-      run: pip install buildozer cython==0.29.33
-
+    - name: Install system dependencies
+      run: |
+         sudo apt-get update
+         sudo apt-get install -y python3-pip build-essential git python3-dev ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev unzip libltdl-dev libffi-dev
     - name: Cache Buildozer
       uses: actions/cache@v4
       with:
         path: |
           ~/.buildozer
           .buildozer
-        key: buildozer-cache-armv7a-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
-        restore-keys: |
-          buildozer-cache-armv7a-${{ runner.os }}-
+        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
 
-    - name: Pre-build to download SDK/NDK
-      run: yes | buildozer android debug || true
-
-    - name: Decode Keystore
-      run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > ma-cle-de-developpement.keystore
-
-    - name: Build APK Release Unsigned
-      run: buildozer android release
-      
-    - name: Vérifier le Keystore
+    - name: Install Buildozer and Cython
       run: |
-       keytool -list -v -keystore ma-cle-de-developpement.keystore -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        pip install --upgrade pip
+        pip install --upgrade cython==0.29.33
+        pip install buildozer
+    - name: Set ANDROID_HOME
+      run: echo "ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
 
-    - name: Signer et Aligner APK avec apksigner
+    - name: Install Android SDK Command Line Tools
       run: |
-       ls bin/
-       cp bin/*-release-unsigned.apk app-unsigned.apk
-       ${ANDROID_SDK_ROOT}/build-tools/34.0.0/apksigner sign \
-       --ks ma-cle-de-developpement.keystore \
-       --ks-key-alias mon-alias \
-       --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
-       --key-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
-       --out bin/quizapp_comores-v${{ github.run_number }}-signed.apk \
-       app-unsigned.apk
-       ${ANDROID_SDK_ROOT}/build-tools/34.0.0/apksigner verify bin/*-signed.apk
-
-    - name: Upload APK Artifact
+        mkdir -p $ANDROID_HOME/cmdline-tools
+        cd $ANDROID_HOME/cmdline-tools
+        wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdtools.zip
+        unzip cmdtools.zip
+        mv cmdline-tools latest
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;25.2.9519653"
+    - name: Fix Buildozer sdkmanager path
+      run: |
+        mkdir -p $ANDROID_HOME/tools/bin
+        ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager $ANDROID_HOME/tools/bin/sdkmanager
+        ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager $ANDROID_HOME/tools/bin/avdmanager
+    - name: Build with Buildozer
+      timeout-minutes: 45
+      run: |
+        buildozer -v android debug 2>&1 | tee build.log
+    - name: Upload APK  # <-- AJOUTE ÇA
+      if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: MathQuizComores-v${{ github.run_number }}-armv7a-signed
-        path: bin/*-signed.apk
+        name: app-debug
+        path: bin/*.apk
