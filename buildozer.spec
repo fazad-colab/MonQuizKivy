@@ -10,7 +10,7 @@ package.name = quizapp_comores
 package.domain = org.fazad
 
 # Version de l'app
-version = 1.4.25
+version = 1.4.26
 
 # Orientation portrait
 orientation = portrait
@@ -25,7 +25,7 @@ source.dir =.
 source.include_exts = py,png,jpeg,kv,json,ogg
 
 # Dossiers à inclure EN PLUS
-source.include_patterns = badges/*, musiques/*, icône_appli/*
+source.include_patterns = badges/*, musiques/*, icone_appli/*
 
 # Icone de l'application. Mets ton logo.png dans le dossier racine
 icon.filename = badges/logo.png
