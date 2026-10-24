@@ -3,8 +3,8 @@ title = Math Quiz Comores
 package.name = quizapp_comores
 package.domain = org.fazad
 source.dir =.
-source.include_exts = py,png,jpeg,kv,json,ogg
-source.include_patterns = badges/*, musiques/*, icône_appli/*
+source.include_exts = py,png,jpeg,kv,json,ogg,html
+source.include_patterns = badges/*, musiques/*, icône_appli/*, katex/*
 
 version = 1.4.20
 requirements = python3,kivy,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow,android
