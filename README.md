@@ -38,7 +38,7 @@ Application mobile Android de quiz de mathématiques développée en Python/Kivy
 
 | Écran Principal | Quiz en cours |
 | :---: | :---: |
-| ![Écran 1](docs/screenshots/screen1.png) | ![Écran 2](docs/screenshots/screen2.png) |
+| ![Écran 1](docs/screenshots/menu_principale.jpj) | ![Écran 2](docs/screenshots/choi_classe.jpj) |
 
 ---
 
@@ -57,7 +57,7 @@ Pour tester la dernière version de l'application sur ton smartphone Android :
 Si tu souhaites exécuter ou compiler le projet localement :
 
 ### Prérequis
-* Python 3.x
+* Python 3.13
 * Pydroid 3 (sur Android) ou un environnement virtuel Python (sur PC)
 
 ### Lancement direct
