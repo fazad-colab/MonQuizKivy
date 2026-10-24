@@ -62,11 +62,14 @@ Si tu souhaites exécuter ou compiler le projet localement :
 
 ### Lancement direct
 ```bash
-git clone [https://github.com/ton-pseudo/math-quiz-comores.git](https://github.com/ton-pseudo/math-quiz-comores.git)
+https://github.com/fazad-colab/MonQuizKivy
+```
+```bash
 cd math-quiz-comores
 pip install -r requirements.txt
 python main.py
 ```
- Auteur & Vision
+
+### 🇰🇲Auteur & Vision
 ​Projet conçu et développé par Fazad (Moroni, Comores).
 ​Objectif : Créer des solutions numériques éducatives et promouvoir l'innovation technologique aux Comores.
