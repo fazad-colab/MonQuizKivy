@@ -1,7 +1,7 @@
 Copyright (c) 2026 Fazad Ahamada / Omnimath
 Tous droits réservés.
 
-Ce logiciel, le code source, les interfaces graphiques, la marque et tous les fichiers associés sont la propriété exclusive de Fazad Ahamada (Omnimath).
+Ce logiciel, le code source, les interfaces graphiques, la marque et tous les fichiers associés sont la propriété exclusive de Fazad Nassur Ahamada (Omnimath).
 
 Toute reproduction, distribution, modification, adaptation, traduction, compilation, publication, mise à disposition, ou utilisation de ce logiciel et de son code source, en tout ou en partie, est strictement interdite sans l’autorisation écrite préalable de l'auteur.
 
