@@ -5,9 +5,9 @@ import time
 import os
 import sys
 import webbrowser
-import webview
+#import webview
 import traceback
-from webview.window import Window
+#from webview.window import Window
 from kivy.utils import platform
 from html import escape
 from kivy.uix.widget import Widget
