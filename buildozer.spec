@@ -6,7 +6,7 @@ source.dir =.
 source.include_exts = py,png,jpeg,kv,json,ogg,html
 source.include_patterns = badges/*, musiques/*, icône_appli/*, Katex/*
 
-version = 1.5.1
+version = 1.5.2
 requirements = python3,kivy,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow,android,pyjnius,requests,urllib3,certifi,idna,chardet
 
 
