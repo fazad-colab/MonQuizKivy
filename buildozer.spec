@@ -19,7 +19,9 @@ android.ndk = 28c
 
 icon.filename = badges/logo.png
 
-android.permissions = INTERNET,POST_NOTIFICATIONS
+# INTERNET pour les requêtes API, ACCESS_NETWORK_STATE pour vérifier la connexion.
+# Le stockage interne privé de l'application ne nécessite aucune permission Android.
+android.permissions = INTERNET,ACCESS_NETWORK_STATE,POST_NOTIFICATIONS
 android.release_artifact = apk
 android.sign = True
 android.debug = False
