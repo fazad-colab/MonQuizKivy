@@ -6,6 +6,8 @@ import os
 import sys
 import webbrowser
 import traceback
+from jnius import autoclass
+from plyer import battery
 from android_math_webview import AndroidMathWebView
 from kivy.utils import platform
 from html import escape
@@ -258,7 +260,7 @@ class FixedDynamicQuizApp(App):
         # --- STATISTIQUES AVANCÉES ---
         self.stats_chapitres = {}
         self.historique_scores = []  # Pour analyser la vitesse d'évolution (stable, progresse, régresse)
-        self.nom_fichier_sauvegarde = "mathquiz.json"
+        self.nom_fichier_sauvegarde = os.path.join(self.user_data_dir, "mathquiz.json")
         
         # --- PROGRAMME OFFICIEL COMPLET ---
         self.progression_officielle = {
@@ -1419,9 +1421,9 @@ class FixedDynamicQuizApp(App):
                 with open(self.nom_fichier_sauvegarde, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 self.nom_utilisateur = data.get("nom_utilisateur", "")
-                self.nom_mascotte = donnees.get("nom_mascotte", "Locky")
-                self.niveau_mascotte = donnees.get("niveau_mascotte", 1)
-                self.xp_mascotte = donnees.get("xp_mascotte", 0)
+                self.nom_mascotte = data.get("nom_mascotte", "Locky")
+                self.niveau_mascotte = data.get("niveau_mascotte", 1)
+                self.xp_mascotte = data.get("xp_mascotte", 0)
                 self.niveau_utilisateur=data.get("niveau_utilisateur", "")
                 self.classe_utilisateur=data.get("classe_utilisateur", "")
                 self.sexe_utilisateur=data.get("sexe_utilisateur", "")
