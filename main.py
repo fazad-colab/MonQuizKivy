@@ -5,9 +5,8 @@ import time
 import os
 import sys
 import webbrowser
-#import webview
 import traceback
-#from webview.window import Window
+from android_math_webview import AndroidMathWebView
 from kivy.utils import platform
 from html import escape
 from kivy.uix.widget import Widget
@@ -447,7 +446,7 @@ class FixedDynamicQuizApp(App):
         text = text.replace("}", "}")
         text = text.strip()
         return text
-
+      
     def build_katex_page(self, enonce, opts, correct, exp):
         enonce_tex = self._math_safe_text(enonce)
         correct_tex = self._math_safe_text(correct)
@@ -540,41 +539,15 @@ class FixedDynamicQuizApp(App):
 </body>
 </html>
 """
+        return page     
 
-        return page
-        
     def afficher_question_math_web(self, enonce, opts, correct, exp):
-        import traceback
-
-        if platform == 'android':
-            from android.runnable import run_on_ui_thread
-            from jnius import autoclass
-    
-            WebView = autoclass('android.webkit.WebView')
-            WebViewClient = autoclass('android.webkit.WebViewClient')
-            Activity = autoclass('org.kivy.android.PythonActivity').mActivity
-        else:
-    # Fallback ou simulation sur ordinateur / Pydroid sans crash
-            pass
-
         html_content = self.build_katex_page(enonce, opts, correct, exp)
-
-        chemin = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "question_math.html"
+        return AndroidMathWebView(
+            html_content,
+            size_hint=(1, None),
+            #height=dp(190),
         )
-
-        with open(chemin, "w", encoding="utf-8") as fichier:
-            fichier.write(html_content)
-
-        # Correction de l'appel pywebview pour Android / Pydroid
-        try:
-            url_absolue = "file://" + os.path.abspath(chemin)
-            webview.create_window('Math Quiz Comores', url_absolue)
-            webview.start()
-        except Exception as e:
-            print(f"Erreur webview : {e}")
-
     #___ECRAN DE DÉMARRAGE ___ 
     def afficher_ecran_demarrage(self):
         self.nettoyer_boutons_bas()
@@ -2420,7 +2393,7 @@ class FixedDynamicQuizApp(App):
         )
         
         def ajuster_hauteur_enonce(instance, texture_size):
-            instance.height = max(dp(45), texture_size[1] + dp(10))
+            instance.height = max(dp(65), texture_size[1] + dp(10))
 
         lbl_head.bind(
             width=lambda inst, w: setattr(inst, 'text_size', (w - dp(10), None)),
@@ -3554,6 +3527,7 @@ class FixedDynamicQuizApp(App):
         
         chapitre_cible = self.examen_questions[self.examen_index_actuel]
         self.chapitre_en_cours = chapitre_cible
+        self.sauvegarder_donnees_locales()	
         
         self.info_label.text = f"MODE EXAMEN\n Question {self.examen_index_actuel + 1}/10"
         enonce, correct, opts, exp = self.moteur_generateur_mathematique(self.classe_actuelle, chapitre_cible)
