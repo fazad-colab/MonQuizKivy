@@ -3,7 +3,7 @@ title = Math Quiz Comores
 package.name = quizapp_comores
 package.domain = org.fazad
 source.dir =.
-source.include_exts = py,png,jpeg,kv,json,ogg,html
+source.include_exts = py,png,jpeg,kv,json,ogg,html,js,css,woff,woff2,ttf
 source.include_patterns = badges/*, musiques/*, icône_appli/*, Katex/*
 
 version = 1.5.3
