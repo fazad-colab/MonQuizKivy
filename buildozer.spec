@@ -3,10 +3,10 @@ title = Math Quiz Comores
 package.name = quizapp_comores
 package.domain = org.fazad
 source.dir =.
-source.include_exts = py,png,jpeg,kv,json,ogg,html,js,css,woff,woff2,ttf
-source.include_patterns = badges/*, musiques/*, icône_appli/*, Katex/*
+source.include_exts = py,png,jpg,kv,atlas,ogg,mp3,wav,json,html,js,css,woff,woff2,ttf
+source.include_patterns = katex/*,katex/contrib/*,katex/fonts/*,sons/*,musiques/*,badges/*,icone_appli/*
 
-version = 1.5.3
+version = 1.6.0
 requirements = python3,kivy,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow,android,pyjnius,requests,urllib3,certifi,idna,chardet
 
 
@@ -19,8 +19,6 @@ android.ndk = 28c
 
 icon.filename = badges/logo.png
 
-# INTERNET pour les requêtes API, ACCESS_NETWORK_STATE pour vérifier la connexion.
-# Le stockage interne privé de l'application ne nécessite aucune permission Android.
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,POST_NOTIFICATIONS
 android.release_artifact = apk
 android.sign = True
