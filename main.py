@@ -6,10 +6,10 @@ import os
 import sys
 import webbrowser
 import traceback
-from jnius import autoclass
-from plyer import battery
-from android_math_webview import AndroidMathWebView
+#os.environ['KIVY_AUDIO'] = 'sdl2'  # doit précéder tout import kivy
 from kivy.utils import platform
+from android_math_webview import AndroidMathWebView
+from latex_utils import latex_vers_texte
 from html import escape
 from kivy.uix.widget import Widget
 os.environ['KIVY_AUDIO'] = 'sdl2'
@@ -22,18 +22,18 @@ from kivy.animation import Animation
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.screenmanager import Screen
 from kivy.uix.image import Image
-from moteur_quiz import MoteurMathematique
+from moteur_quiz import MoteurMathematique, PROGRESSION_OFFICIELLE
 from kivy.metrics import dp
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
-from kivy.uix.button import Button
+from en_ligne import Button, SoundManager, FonctionsEnLigne, bouton as bouton_neon
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.progressbar import ProgressBar
 from kivy.uix.textinput import TextInput
 from kivy.clock import Clock
 from kivy.graphics import Color, RoundedRectangle, Rectangle, Ellipse
-from kivy.network.urlrequest import UrlRequest 
+from kivy.network.urlrequest import UrlRequest
 from kivy.core.text import LabelBase
 
 # ___CLASS DU MASCOTTE ___
@@ -43,41 +43,41 @@ class DraggableMascot(FloatLayout):
         self.size_hint = (None, None)
         self.size = (dp(200), dp(120))
         self.pos = (dp(60), dp(800))
-        
+
         with self.canvas.before:
             Color(0.08, 0.18, 0.32, 0)
             self.bg_rect = RoundedRectangle(size=self.size, pos=self.pos, radius=[8])
-        
+
         self.bind(pos=self._update_graphics, size=self._update_graphics)
 
-        self.layout_interne = BoxLayout( 
-            orientation='horizontal', 
-            size_hint=(1, 1), 
+        self.layout_interne = BoxLayout(
+            orientation='horizontal',
+            size_hint=(1, 1),
             pos_hint={'x': 0, 'y': 0},
-            padding=dp(0), 
+            padding=dp(0),
             spacing=dp(0)
         )
-        
+
         self.avatar_img = Image(
-            source='badges/locky.png', 
+            source='badges/locky.png',
             size_hint=(None, None),
             size=(dp(150), dp(150))
         )
-        
+
         self.bulle_label = Label(
             text="Prêt pour le défi ?",
             font_size='12sp',
             color=(0.3, 0.8, 0.6, 1),
             halign='center',
             valign='middle',
-            bold=True  
+            bold=True
         )
         self.bulle_label.bind(size=lambda s, w: setattr(s, 'text_size', w))
 
         self.layout_interne.add_widget(self.avatar_img)
-        self.layout_interne.add_widget(self.bulle_label)  
-        self.add_widget(self.layout_interne)            
-        
+        self.layout_interne.add_widget(self.bulle_label)
+        self.add_widget(self.layout_interne)
+
         Clock.schedule_interval(self.changer_message_aleatoire, 10)
         Clock.schedule_interval(self.declencher_acrobatie, 15)
 
@@ -87,12 +87,9 @@ class DraggableMascot(FloatLayout):
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
- # Si c'est un double-tap, on déclenche l'excitation
             if touch.is_double_tap:
                 self.declencher_excitation()
                 return True
-            
-            # Sinon, on prépare le déplacement (drag)
             self.is_dragging = False
             self.start_touch_pos = touch.pos
             self.touch_offset_x = touch.pos[0] - self.x
@@ -103,7 +100,6 @@ class DraggableMascot(FloatLayout):
     def on_touch_move(self, touch):
         if self.collide_point(*touch.pos) or getattr(self, 'is_dragging', False):
             if hasattr(self, 'start_touch_pos'):
-# distance parcourue pour détecter un glissement
                 distance = ((touch.pos[0] - self.start_touch_pos[0])**2 + (touch.pos[1] - self.start_touch_pos[1])**2)**0.5
                 if distance > dp(10):
                     self.is_dragging = True
@@ -120,51 +116,51 @@ class DraggableMascot(FloatLayout):
             return True
         return super().on_touch_up(touch)
 
-    def creer_paillette(self, dt):        
+    def creer_paillette(self, dt):
         pos_globale_x, pos_globale_y = self.to_window(self.center_x, self.center_y)
-        
+
         particule = FloatLayout(
-            size_hint=(None, None), 
-            size=(dp(14), dp(14)), 
-            pos=(self.x + self.width / 2 + random.randint(int(dp(-15)), int(dp(15))), 
+            size_hint=(None, None),
+            size=(dp(14), dp(14)),
+            pos=(self.x + self.width / 2 + random.randint(int(dp(-15)), int(dp(15))),
                  self.y + self.height / 2 + random.randint(int(dp(-15)), int(dp(15))))
         )
         with particule.canvas:
             Color(0.4, 0.8, 1, 0.9)
             Ellipse(size=(dp(14), dp(14)), pos=(0, 0))
-            
-        window.add_widget(particule)
-        
+
+        Window.add_widget(particule)
+
         anim_flamme = Animation(
-            size=(dp(4), dp(4)),  
-            y=particule.y + random.randint(int(dp(10)), int(dp(35))), 
-            x=particule.x + random.randint(int(dp(-10)), int(dp(10))), 
-            opacity=0, 
+            size=(dp(4), dp(4)),
+            y=particule.y + random.randint(int(dp(10)), int(dp(35))),
+            x=particule.x + random.randint(int(dp(-10)), int(dp(10))),
+            opacity=0,
             duration=0.35,
             t='out_quad'
         )
-        anim_flamme.bind(on_complete=lambda *args: self.parent.remove_widget(particule) if particule.parent else None)
+        anim_flamme.bind(on_complete=lambda *args: Window.remove_widget(particule) if particule.parent else None)
         anim_flamme.start(particule)
 
     def declencher_excitation(self):
-        self.size_hint = (None, None)       
+        self.size_hint = (None, None)
         anim = Animation(duration=0)
         for _ in range(4):
             rand_x = random.randint(int(dp(10)), int(Window.width - self.width - dp(10)))
             rand_y = random.randint(int(Window.height * 0.05), int(Window.height - self.height - dp(50)))
             anim += Animation(x=rand_x, y=rand_y, duration=0.12, t='out_quad')
-        
+
         for i in range(8):
             Clock.schedule_once(self.creer_paillette, i * 0.08)
-            
+
         messages_excites = [
-            "Waaah ! ", 
-            "Magie ! ", 
-            "Bougeotte ! ", 
+            "Waaah ! ",
+            "Magie ! ",
+            "Bougeotte ! ",
             "Génie ! "
         ]
         self.bulle_label.text = random.choice(messages_excites)
-        
+
         anim.start(self)
 
     def changer_message_aleatoire(self, dt):
@@ -181,47 +177,56 @@ class DraggableMascot(FloatLayout):
     def declencher_acrobatie(self, dt):
         anim = Animation(y=self.y + dp(30), duration=0.25) + Animation(y=self.y, duration=0.25)
         anim.start(self)
-        
+
 # ___CLASS PRINCIPAL ___
-class FixedDynamicQuizApp(App):
+class FixedDynamicQuizApp(FonctionsEnLigne, App):
     def build(self):
 
         if Window:
             Window.softinput_mode = 'below_target'
- 
-   # Valeurs par défaut de la mascotte avec Locky
+
+        # Valeurs par défaut de la mascotte avec Locky
         self.nom_mascotte = "Locky"
         self.niveau_mascotte = 1
+        self.sound = None
+        self.playlist = []
+        self.playlist_question = []
         self.xp_mascotte = 0
-   
+
         # --- VARIABLES GLOBALES DE SESSION ---
         self.score = 0
-        self.combo = 0  
+        self.combo = 0
         self.bonne_reponse = ""
         self.explication_erreur = ""
         self.niveau_actuel = ""
         self.classe_actuelle = ""
-        self.question_generée_ia = "Aucune question pour l'instant"
-        self.mode_jeu = "" 
-        
+        self.question_generee_ia = "Aucune question pour l'instant"
+        self.mode_jeu = ""
+
         # --- DONNÉES UTILISATEUR & DEVELOPPEUR ---
         self.nom_utilisateur = ""
-        self.niveau_utilisateur =""
-        self.classe_utilisateur=""
-        self.sexe_utilisateur =""
-        self.age_utilisateur =""
+        self.niveau_utilisateur = ""
+        self.classe_utilisateur = ""
+        self.sexe_utilisateur = ""
+        self.age_utilisateur = ""
+        self.identifiant_joueur = ""
+        self.classe_choisie = ""
+        self.niveau_choisie = ""
+        self.index_grade = 1
         self.nom_developpeur = "Fazad Nassur"
         self.temps_debut_question = 0.0
-        
+        self.question_courante = None
+        self.index_correct = 0
+
         # --- SYSTÈME DE PROGRESSION (XP & RANGS EXTENDUS TYPE COMPÉTITIF) ---
         self.xp = 0
         self.niveau_profil = 1
-        self.points_de_rang = 0 
-        
+        self.points_de_rang = 0
+
         # --- FILE D'ATTENTE DES AVIS (HORS-LIGNE) ---
         self.file_attente_avis = []
 
-        # Liste ordonnée mise à jour avec toutes les sous-catégories 
+        # Liste ordonnée mise à jour avec toutes les sous-catégories
         self.LISTE_RANGS = [
             "Bronze I ", "Bronze II ", "Bronze III ", "Bronze IV ", "Bronze V ",
             "Argent I ", "Argent II ", "Argent III ", "Argent IV ", "Argent V ",
@@ -234,18 +239,18 @@ class FixedDynamicQuizApp(App):
             "Master I ", "Master II ", "Master III ", "Master IV ", "Master V ",
             "Grand Master I ", "Grand Master II ", "Grand Master III ", "Grand Master IV ", "Grand Master V ",
             "Leadership "
-        ]       
-        
+        ]
+
         # --- SYSTÈME D'EXAMEN BLANC ---
         self.examen_questions = []
         self.examen_index_actuel = 0
-        self.examen_reponses_eleve = [] 
-        self.temps_examen_restant = 300 
-        
+        self.examen_reponses_eleve = []
+        self.temps_examen_restant = 300
+
         self.pile_chapitres_courants = []
         self.ordre_classes = ["6ème", "5ème", "4ème", "3ème", "2nde", "1ére", "Terminale", "1ére année", "2éme année"]
-        
-                # Dictionnaire de profil harmonisé avec tes variables existantes
+
+        # Dictionnaire de profil harmonisé avec tes variables existantes
         self.profil_actuel = {
             "nom": getattr(self, 'nom_utilisateur', ''),
             "identifiant": getattr(self, 'identifiant_joueur', ''),
@@ -256,25 +261,18 @@ class FixedDynamicQuizApp(App):
             "points_de_rang": getattr(self, 'points_de_rang', 0),
             "grade_actuel": self.obtenir_rang_actuel() if hasattr(self, 'obtenir_rang_actuel') else "Bronze I"
         }
-        
+
         # --- STATISTIQUES AVANCÉES ---
         self.stats_chapitres = {}
-        self.historique_scores = []  # Pour analyser la vitesse d'évolution (stable, progresse, régresse)
-        self.nom_fichier_sauvegarde = os.path.join(self.user_data_dir, "mathquiz.json")
-        
+        self.historique_scores = []
+        self.nom_fichier_sauvegarde = "mathquiz.json"
+        #self.nom_fichier_sauvegarde = os.path.join(self.user_data_dir, "mathquiz.json")
+
         # --- PROGRAMME OFFICIEL COMPLET ---
-        self.progression_officielle = {
-            "6ème": ["Arithmétiques", "Droites et Segments", "Nombres décimaux", "Les angles", "Fraction", "Triangles", "Organisation des calculs", "Cercle et parallélogramme", "Entier relatifs et nombres décimaux relatifs", "Symétrie centrale et axiale", "Initiation aux calculs littéraux", "Proportionnalité", "Cube – Pavé droit – Cylindre", "Pourcentage et échelle"],
-            "5ème": ["Nombres décimaux relatifs", "Puissance", "Arithmétique", "Distance entre deux points", "Angles", "Fraction", "Calcul littérale", "Notion d’équation", "Symétrie centrale et orthogonale", "Médiatrice d’un segment", "Repérage sur un quadrillage", "Proportionnalité", "Pourcentage et échelle", "Polygone", "Prisme droit", "Pyramide"],
-            "4ème": ["PGDC et PPCM", "Nombres rationnels", "Distance d’un point à une droite", "Secteurs angulaires", "Symétrie centrale et orthogonale", "Projection", "Les triangles", "Cercle", "Outil vectoriel", "Puissance", "Calcul sur les expressions algébriques", "Equation, Intervalle et Inéquation", "Proportionnalité", "Statistique", "Repérage", "Sphère et boule", "Polygone régulier", "Pyramide et cône de révolution"],
-            "3ème": ["Renforcement de capacité", "Racine carrée et Valeur absolue", "Triangle rectangle", "Monôme et polynôme", "Thales", "Equation et Inéquation", "Vecteur et Homothétie", "Repère", "Equation d’une droite", "Application affine", "Système dans IR²", "Statistique", "Angles et Rotation", "Symétrie centrale et Axiale", "Pyramide et cône", "Sujet types"],
-            "2nde": ["Vecteurs et repérage", "Valeur absolue et intervalles"],
-            "1ére": ["Dérivation fonctionnelle", "Polynômes du second degré"],
-            "Terminale": ["Nombres complexes", "Calcul intégral"],
-            "1ére année": ["Cinématique absolue", "Accélération de Coriolis", "Frenet", "Régime RLC", "Optique de Descartes", "Théorème du rang", "Développements limités"],
-            "2éme année": [ ]
-        }
-        
+        # programme unique partagé avec le moteur et le serveur (Analyse 1 et Analyse 2 inclus)
+        self.progression_officielle = {k: list(v) for k, v in PROGRESSION_OFFICIELLE.items()}
+        self.progression_officielle["2éme année"] = []
+
         # --- DICTIONNAIRE DU FORMULAIRE DE COURS ---
         self.formulaire_cours = {
             "6ème": "• Priorités : Multiplications et divisions d'abord.\n• Périmètre Cercle = 2 × π × R\n• Angles : Aigu (<90°), Droit (=90°), Obtus (>90°).\n• Symétrie axiale : Pliage le long d'une droite.",
@@ -287,73 +285,67 @@ class FixedDynamicQuizApp(App):
             "1ére année": "• Accélération Coriolis : Ac = 2·vec(Ω) × vec(Vr)\n• Base de Frenet : An = v² / R\n• Théorème du rang : dim(Ker(f)) + dim(Im(f)) = dim(E)\n• Développements limités (en 0) :\n  cos(x) = 1 - x²/2 + o(x²)\n  sin(x) = x - x³/6 + o(x³)\n  e^x = 1 + x + o(x)",
             "2éme année": ""
         }
-        
+
         for classe, chapitres in self.progression_officielle.items():
             for chap in chapitres:
                 self.stats_chapitres[chap] = [0, 0]
-                
+
         self.evenement_chrono = None
         self.chapitre_en_cours = ""
-        
-#--- ROOT LAYOUT GLOBAL (superposer Locky) ---
+
+        #--- ROOT LAYOUT GLOBAL (superposer Locky) ---
         self.root_layout = FloatLayout()
-# ---INITIALISATION DES NUAGES ALÉATOIRES --
+        # ---INITIALISATION DES NUAGES ALÉATOIRES --
         self.clouds = []
-        for _ in range(30): 
+        for _ in range(30):
             self.clouds.append({
-                'x': random.randint(-300, Window.width), # Position de départ horizontale étalée
-                'y_offset': random.randint(50, 350),      # Hauteur aléatoire par rapport au bas
-                'width': random.randint(80, 180),        # Largeur aléatoire pour varier les formes
-                'height': random.randint(30, 65),        # Hauteur aléatoire
-                'speed': random.randint(25, 60)          # Vitesse de déplacement propre à chaque nuage
-    })
-               
-    # ===CONSTRUCTION DE L'INTERFACE ===
-# --- initialisation du temps de l'animation   ---
+                'x': random.randint(-300, Window.width),
+                'y_offset': random.randint(50, 350),
+                'width': random.randint(80, 180),
+                'height': random.randint(30, 65),
+                'speed': random.randint(25, 60)
+            })
+
+        # ===CONSTRUCTION DE L'INTERFACE ===
         if not hasattr(self, 'temps'):
             self.temps = 0
-            
-# --- CANVAS PRINCIPAL DU LOGO ---
+
         self.main_layout = BoxLayout(orientation='vertical', padding=dp(5), spacing=dp(10))
-        
+
         with self.main_layout.canvas.before:
-            # Couleur dynamique de fond
-            self.rect_color = Color(0.05, 0.05, 0.1, 1)
+            self.rect_color = Color(0.02, 0.02, 0.05, 1)
             self.rect = RoundedRectangle(
                 size=self.main_layout.size,
                 pos=self.main_layout.pos,
                 radius=[dp(15)]
             )
-            
-            # --- DESSIN DE TOUS LES NUAGES ---
-            Color(1, 1, 1, 0.25) 
+
+            Color(0.0, 0.9, 1.0, 0.055)
             self.cloud_rects = []
             for cloud in self.clouds:
                 rect = RoundedRectangle(
-                    pos=(cloud['x'], self.main_layout.y + cloud['y_offset']), 
+                    pos=(cloud['x'], self.main_layout.y + cloud['y_offset']),
                     size=(cloud['width'], cloud['height']),
-                    radius=[cloud['height'] / 2] 
+                    radius=[cloud['height'] / 2]
                 )
                 self.cloud_rects.append((rect, cloud))
-      
+
         self.main_layout.bind(size=self._update_rect, pos=self._update_rect)
-        
- # Lancement de l'horloge d'animation (30 FPS)
+
         Clock.schedule_interval(self._animer_fond_principal, 1/30)
-        
-        # 1. Zone d'en-tête (Informations de profil et Chronomètre) 
+
+        # 1. Zone d'en-tête
         self.info_layout = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(2))
         self.info_label = Label(text="Initialisation en cours...", font_size='18sp', bold=True, color=(1, 0.84, 0, 1), halign='left', valign='middle')
         self.info_label.bind(size=self._update_text_size)
         self.chrono_label = Label(text="", font_size='22sp', bold=True, color=(1, 0.35, 0.35, 1), halign='right', valign='middle')
-       # Bouton Paramètres dans le coin supérieur droit
         self.btn_parametres = Button(
-        background_normal='icone_appli/parametre.png',
-        background_down='icone_appli/parametre.png',
-        size_hint=(None, None),
-        size=(dp(50), dp(50)),
-        pos_hint={'top': 0.86, 'right': 0.96}
-    )
+            background_normal='icone_appli/parametre.png',
+            background_down='icone_appli/parametre.png',
+            size_hint=(None, None),
+            size=(dp(50), dp(50)),
+            pos_hint={'top': 0.86, 'right': 0.96}
+        )
         self.btn_parametres.bind(on_press=self.ouvrir_menu_parametres)
 
         self.chrono_label.bind(size=self._update_text_size)
@@ -362,51 +354,43 @@ class FixedDynamicQuizApp(App):
         self.main_layout.add_widget(self.info_layout)
         self.info_layout.add_widget(self.btn_parametres)
 
-        
-        # 2. Zone d'affichage des énoncés de questions ou des cours - MILIEU SUPÉRIEUR
+        # 2. Zone d'affichage des énoncés
         self.scroll_texte = ScrollView(size_hint_y=0.10, do_scroll_x=False, do_scroll_y=True)
         self.question_label = Label(text="", font_size='20sp', halign='center', valign='middle', size_hint=(1, None), color=(1, 1, 1, 1))
         self.question_label.bind(width=lambda instance, value: setattr(instance, 'text_size', (value - 10, None)))
         self.question_label.bind(texture_size=lambda instance, size: setattr(instance, 'height', max(size[1] + 10, 40)))
         self.scroll_texte.add_widget(self.question_label)
         self.main_layout.add_widget(self.scroll_texte)
-        
-        # 3. Zone d'interaction dynamique principale (Boutons de réponses, Saisie, Menus)
+
+        # 3. Zone d'interaction dynamique principale
         self.scroll_interaction = ScrollView(size_hint_y=0.90, do_scroll_x=False, do_scroll_y=True)
         self.interaction_layout = BoxLayout(orientation='vertical', size_hint=(1, None), height=dp(500), spacing=dp(8))
         self.scroll_interaction.add_widget(self.interaction_layout)
         self.main_layout.add_widget(self.scroll_interaction)
-        
- # Bouton persistant dédié pour le retour menu
+
+        # Bouton persistant
         self.btn_menu_persistant = Button(text="Revenir au Menu Principal", font_size='20sp', bold=True, size_hint_y=None, height=dp(50), background_color=(0.75, 0.2, 0.2, 1))
         self.btn_menu_persistant.bind(on_press=self.action_retour_menu_persistant)
-        
-        # Bouton unique de retour pour les vues isolées (S'affichera tout en bas du main_layout)
+
         self.btn_retour_isole = Button(text="← Retour Évolution", size_hint=(1, None), height=dp(50), font_size='22sp', bold=True, background_color=(0, 0, 0, 0))
         self.charger_donnees_locales()
-        
-        # Ajout du layout principal dans le root_layout
+
         self.root_layout.add_widget(self.main_layout)
 
-        # --- INSTANCIATION ET AJOUT DE LA MASCOTTE LOCKY ---
         self.mascotte = DraggableMascot()
         self.root_layout.add_widget(self.mascotte)
         self.charger_donnees_locales()
-        
-        # Lancement de la tâche récurrente de synchronisation en arrière-plan (toutes les 15 secondes)
+
         Clock.schedule_interval(self.tenter_synchronisation_file_attente, 15.0)
+        self.init_en_ligne()          # réseau, sons, copie d'ID, salles, joueurs
         self.afficher_ecran_demarrage()
-            
+
         return self.root_layout
-       
+
     def _animer_fond_principal(self, dt):
-        # Déplacement individuel de chaque nuage
         if hasattr(self, 'cloud_rects'):
             for rect, cloud in self.cloud_rects:
-                # Avancer selon sa propre vitesse
                 cloud['x'] += cloud['speed'] * dt
-                
-# reinisialiser chaque nuage (trajectoire unique)
                 if cloud['x'] > Window.width + 50:
                     cloud['x'] = random.randint(-350, -100)
                     cloud['y_offset'] = random.randint(30, int(self.main_layout.height * 0.7))
@@ -415,195 +399,91 @@ class FixedDynamicQuizApp(App):
                     cloud['height'] = random.randint(30, 65)
                     rect.size = (cloud['width'], cloud['height'])
                     rect.radius = [cloud['height'] / 2]
-
-                # Mise à jour de la position graphique
                 rect.pos = (cloud['x'], self.main_layout.y + cloud['y_offset'])
 
-        # Force le rafraîchissement graphique
         if hasattr(self, 'root_layout') and self.root_layout:
             self.root_layout.canvas.ask_update()
 
     def _update_rect(self, instance, value):
         self.rect.pos = instance.pos
         self.rect.size = instance.size
-        
+
     def _math_safe_text(self, text):
-        text = str(text)
-        text = text.replace("²", "^2")
-        text = text.replace("³", "^3")
-        text = text.replace("×", "\\times ")
-        text = text.replace("÷", "\\div ")
-        text = text.replace("π", "\\pi")
-        text = text.replace("∞", "\\infty")
-        text = text.replace("°", "^\\circ")
-        text = text.replace("≤", "\\leq ")
-        text = text.replace("≥", "\\geq ")
-        text = text.replace("≠", "\\neq ")
-        text = text.replace("∈", "\\in ")
-        text = text.replace("∩", "\\cap ")
-        text = text.replace("∪", "\\cup ")
-        text = text.replace("→", "\\to ")
-        text = text.replace("√", "\\sqrt{")
-        text = text.replace("(", "}")
-        text = text.replace("}", "}")
-        text = text.strip()
-        return text
-      
-    def build_katex_page(self, enonce, opts, correct, exp):
-        enonce_tex = self._math_safe_text(enonce)
-        correct_tex = self._math_safe_text(correct)
-        exp_tex = self._math_safe_text(exp)
+        return str(text).strip()
 
-        options_html = ""
-        for opt in opts:
-            t = self._math_safe_text(opt)
-            options_html += f"<li><span class='math' data-tex='{escape(t, quote=True)}'></span></li>"
-
-        page = f"""
-<!doctype html>
+    def build_katex_page(self, enonce, opts=None, correct=None, exp=None):
+        enonce_html = escape(self._math_safe_text(enonce)).replace('\n', '<br>')
+        return f"""<!doctype html>
 <html lang="fr">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Math Quiz Comores</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-    <style>
-        body {{
-            margin: 0;
-            padding: 12px;
-            font-family: sans-serif;
-            background: #0f172a;
-            color: #f8fafc;
-        }}
-        .box {{
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 12px;
-        }}
-        h3 {{
-            margin: 0 0 8px 0;
-            font-size: 18px;
-            color: #e2e8f0;
-        }}
-        .math {{
-            font-size: 18px;
-            line-height: 1.5;
-            word-wrap: break-word;
-        }}
-        ul {{
-            margin: 0;
-            padding-left: 20px;
-        }}
-        li {{
-            margin: 8px 0;
-        }}
-    </style>
-    <script>
-        function renderMath() {{
-            const nodes = document.querySelectorAll('.math');
-            nodes.forEach(node => {{
-                const tex = node.getAttribute('data-tex') || '';
-                try {{
-                    katex.render(tex, node, {{ throwOnError: false, displayMode: false }});
-                }} catch (e) {{
-                    node.textContent = tex;
-                }}
-            }});
-        }}
-        window.addEventListener('DOMContentLoaded', renderMath);
-    </script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {{delimiters: [{{left: '$$', right: '$$', display: true}}, {{left: '$', right: '$', display: false}}], throwOnError: false}});"></script>
+<style>
+body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line-height: 1.6;
+       background: #0f172a; color: #f8fafc; }}
+</style>
 </head>
-<body>
-    <div class="box">
-        <h3>Énoncé</h3>
-        <div class='math' data-tex='{escape(enonce_tex, quote=True)}'></div>
-    </div>
-
-    <div class="box">
-        <h3>Options</h3>
-        <ul>
-            {options_html}
-        </ul>
-    </div>
-
-    <div class="box">
-        <h3>Bonne réponse</h3>
-        <div class='math' data-tex='{escape(correct_tex, quote=True)}'></div>
-    </div>
-
-    <div class="box">
-        <h3>Explication</h3>
-        <div class='math' data-tex='{escape(exp_tex, quote=True)}'></div>
-    </div>
-</body>
-</html>
-"""
-        return page     
+<body>{enonce_html}</body>
+</html>"""
 
     def afficher_question_math_web(self, enonce, opts, correct, exp):
         html_content = self.build_katex_page(enonce, opts, correct, exp)
         return AndroidMathWebView(
             html_content,
             size_hint=(1, None),
-            #height=dp(190),
         )
-    #___ECRAN DE DÉMARRAGE ___ 
+
     def afficher_ecran_demarrage(self):
         self.nettoyer_boutons_bas()
         self.info_layout.opacity = 0
-        self.scroll_texte.opacity = 0 
+        self.scroll_texte.opacity = 0
         self.scroll_interaction.opacity = 0
 
         chemin_logo = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'badges', 'logo.png')
         print(f"CHEMIN LOGO: {chemin_logo}")
-        
+
         ecran_intro = FloatLayout()
-        
-        # 1. Utiliser l'unique instance globale de la mascotte
+
         if not hasattr(self, 'mascotte') or self.mascotte is None:
             self.mascotte = DraggableMascot(size=(dp(160), dp(90)), pos=(dp(20), dp(150)))
-        
+
         if self.mascotte.parent:
             self.mascotte.parent.remove_widget(self.mascotte)
-            
+
         with ecran_intro.canvas.before:
-             Color(0.12, 0.28, 0.48, 0)
-             self.rect_splash = Rectangle(size=ecran_intro.size, pos=ecran_intro.pos)
+            Color(0.12, 0.28, 0.48, 0)
+            self.rect_splash = Rectangle(size=ecran_intro.size, pos=ecran_intro.pos)
         ecran_intro.bind(size=lambda inst, val: setattr(self.rect_splash, 'size', val))
         ecran_intro.bind(pos=lambda inst, val: setattr(self.rect_splash, 'pos', val))
-    
-        # 2. Ajouter d'abord le logo de fond
+
         if os.path.exists(chemin_logo):
             logo_splash = Image(
-                source=chemin_logo, 
+                source=chemin_logo,
                 nocache=True,
                 allow_stretch=True,
                 keep_ratio=True,
-                size_hint=(0.9, 0.9), 
+                size_hint=(0.9, 0.9),
                 pos_hint={'center_x': 0.5, 'center_y': 1},
-                opacity=0 
+                opacity=0
             )
             ecran_intro.add_widget(logo_splash)
-        
-            # FONDU IN + OUT
+
             anim = Animation(opacity=1, duration=0.5) + Animation(opacity=1, duration=2) + Animation(opacity=1, duration=0.5)
             anim.start(logo_splash)
 
-        # 3. Ajouter la mascotte EN DERNIER 
         ecran_intro.add_widget(self.mascotte)
         self.sequence_intro_locky(self.mascotte)
 
-        self.main_layout.add_widget(ecran_intro) 
+        self.main_layout.add_widget(ecran_intro)
         Clock.schedule_once(lambda dt: self.aller_au_menu_principal(ecran_intro), 11)
 
-        
     def sequence_intro_locky(self, mascot):
-        # Positions aléatoires ou définies pour l'écran      
         points = [
-            (Window.width * 0.4, Window.height * 0.7), 
+            (Window.width * 0.4, Window.height * 0.7),
             (Window.width * 0.5, Window.height * 0.1),
             (Window.width * 0.3, Window.height * 0.8)
         ]
@@ -612,36 +492,32 @@ class FixedDynamicQuizApp(App):
             "Chargement... veuillez patienter.",
             f"Cher {self.nom_utilisateur}, c'est presque prêt !"
         ]
-              
+
         for i in range(3):
-            # 1. Déplacement
-            anim_move = Animation(pos=points[i], duration=0.4, t='out_quad')      
-            # 2. Changement de message
+            anim_move = Animation(pos=points[i], duration=0.4, t='out_quad')
+
             def set_msg(inst, val, m=messages[i]):
-                mascot.bulle_label.text = m         
-            # 3. Pause
-            anim_wait = Animation(duration=2.90)        
-            # Assemblage : Mouvement -> Changement de message
+                mascot.bulle_label.text = m
+
+            anim_wait = Animation(duration=2.90)
             sequence = anim_move + Animation(duration=0.5)
-            sequence.bind(on_start=set_msg)        
+            sequence.bind(on_start=set_msg)
             Clock.schedule_once(lambda dt, s=sequence: s.start(mascot), i * 4.45)
-            
-     # ==== CONTTROLE MUSICEAUX ====
+
     def initialiser_lecteur_musique(self):
         if hasattr(self, 'lecteur_actif') and self.lecteur_actif:
             return
 
         self.dossier_musique = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'musiques')
-        
+
         if not os.path.exists(self.dossier_musique):
             os.makedirs(self.dossier_musique)
             print(f"Dossier 'musiques' créé ici : {self.dossier_musique}")
             self.playlist = []
             return
 
-        # Récupère uniquement les .ogg situés directement à la racine du dossier 'musiques' (pour le menu)
         self.playlist = [os.path.join(self.dossier_musique, f) for f in os.listdir(self.dossier_musique) if f.endswith('.ogg') and os.path.isfile(os.path.join(self.dossier_musique, f))]
-        
+
         if not self.playlist:
             print("Aucun fichier .ogg trouvé à la racine du dossier 'musiques'.")
             return
@@ -650,15 +526,13 @@ class FixedDynamicQuizApp(App):
         self.lecteur_actif = True
         self.musique_active = True
         self.volume_musique = 0.5
-        self.jouer_musique_suivante()     
-        # Vérifier si la musique est finie
+        self.jouer_musique_suivante()
         Clock.schedule_interval(self.verifier_fin_musique, 1)
 
     def jouer_musique_suivante(self):
         if not self.playlist or not getattr(self, 'musique_active', True):
             return
 
-        # Vérifier si l'index dépasse la taille de la playlist pour recommencer au début
         if not hasattr(self, 'current_index') or self.current_index >= len(self.playlist):
             self.current_index = 0
 
@@ -676,54 +550,45 @@ class FixedDynamicQuizApp(App):
             print(f"Lecture en cours (Menu) : {os.path.basename(morceau_choisi)}")
 
     def verifier_fin_musique(self, dt):
-        # Relance la musique suivante uniquement si on est dans le menu principal (playlist active)
         if self.sound and self.sound.state == 'stop':
             if hasattr(self, 'playlist') and self.playlist and getattr(self, 'musique_active', True):
                 self.jouer_musique_suivante()
 
-    def aller_au_menu_principal(self, ecran_intro):      # 1. Retirer l'écran d'intro du layout principal
+    def aller_au_menu_principal(self, ecran_intro):
         if ecran_intro in self.main_layout.children:
             self.main_layout.remove_widget(ecran_intro)
-            
-        # 2. Détacher la mascotte de l'écran d'intro pour qu'elle ne soit pas supprimée
+
         if self.mascotte.parent:
             self.mascotte.parent.remove_widget(self.mascotte)
-            
-        # 3. L'ajouter au conteneur principal permanent pour qu'elle reste visible sur le menu
+
         if self.mascotte not in self.root_layout.children:
             self.root_layout.add_widget(self.mascotte)
-            
-        # 1. On retire le splash
+
         self.initialiser_lecteur_musique()
-        # 2. On remet tout visible avec un petit fondu
         anim = Animation(opacity=1, duration=0.5)
         anim.start(self.info_layout)
         anim.start(self.scroll_texte)
         anim.start(self.scroll_interaction)
-        
-         # Réaffiche le bouton paramètres s'il n'y est plus
+
         if self.btn_parametres not in self.info_layout.children:
             self.info_layout.add_widget(self.btn_parametres)
-            
+
         self.charger_donnees_locales()
         if not self.nom_utilisateur:
             self.demander_nom_utilisateur()
         else:
             self.afficher_menu_principal_modes()
-         
-    # ___MENU PARAMÈTRES ___
+
     def ouvrir_menu_parametres(self, instance):
         if hasattr(self, 'layout_parametres') and self.layout_parametres in self.root_layout.children:
             self.root_layout.remove_widget(self.layout_parametres)
-        
+
         self.layout_parametres = FloatLayout()
-        
-        # Fond noir semi-transparent ou opaque
+
         with self.layout_parametres.canvas.before:
-            Color(0, 0, 0, 0.95) 
+            Color(0, 0, 0, 0.95)
             self.rect_fond = Rectangle(size=(Window.width, Window.height), pos=(0, 0))
-            
-        # Titre des paramètres (Fixé en haut)
+
         lbl_titre = Label(
             text="PARAMÈTRES DE L'APPLICATION",
             font_size='22sp',
@@ -734,13 +599,12 @@ class FixedDynamicQuizApp(App):
         )
         self.layout_parametres.add_widget(lbl_titre)
 
-        # Conteneur défilant pour éviter tout chevauchement
         scroll_param = ScrollView(
             size_hint=(0.9, 0.8),
             pos_hint={'center_x': 0.5, 'top': 0.85},
             do_scroll_x=False
         )
-        
+
         box_boutons = BoxLayout(
             orientation='vertical',
             spacing=dp(12),
@@ -751,11 +615,14 @@ class FixedDynamicQuizApp(App):
 
         h_btn = dp(55)
 
-        # Liste des options du menu (Texte, Méthode Callback, Type de couleur)
         options = [
             ("Modifier mes informations personnelles", self.afficher_formulaire_modification_infos, "rouge"),
             ("Consulter mes données enregistrées", self.afficher_donnees_utilisateur, "rouge"),
             ("Réglages Audio", self.ouvrir_menu_reglage, "rouge"),
+            ("Copier mon identifiant", lambda x: self.copier_identifiant(), "rouge"),
+            ("Sons d'interaction : activer / couper", lambda x: self.basculer_sons(), "rouge"),
+            ("Serveur (Internet ou Wi-Fi de la classe)", lambda x: (self.fermer_menu_parametres(x), self.afficher_reglage_serveur()), "rouge"),
+            ("Supprimer mes données en ligne", lambda x: (self.fermer_menu_parametres(x), self.supprimer_mes_donnees_en_ligne()), "rouge"),
             ("Rester connecté au Développeur", lambda x: webbrowser.open("https://chat.whatsapp.com/FlcaUC6BTroDBzZ3ZujlVx"), "rouge"),
             ("Comment fonctionne l'appli", lambda x: self.afficher_popup_aide(), "rouge"),
             ("À propos & Version ", self.afficher_a_propos, "rouge"),
@@ -767,8 +634,8 @@ class FixedDynamicQuizApp(App):
                 text=texte,
                 font_size='17sp',
                 text_size=(Window.width * 0.75, None),
-                halign='center',        
-                valign='middle',        
+                halign='center',
+                valign='middle',
                 size_hint=(1, None),
                 height=h_btn,
                 background_color=(0, 0, 0, 0)
@@ -799,10 +666,8 @@ class FixedDynamicQuizApp(App):
         scroll_param.add_widget(box_boutons)
         self.layout_parametres.add_widget(scroll_param)
 
-        # Affichage par-dessus l'application
         self.root_layout.add_widget(self.layout_parametres)
 
-    # ___SOUS-MENU RÉGLAGE AUDIO___
     def ouvrir_menu_reglage(self, instance):
         self.layout_parametres.clear_widgets()
 
@@ -825,7 +690,6 @@ class FixedDynamicQuizApp(App):
             pos_hint={'center_x': 0.5, 'center_y': 0.55}
         )
 
-        # --- LIGNE 1 : ACTIVATION / DÉSACTIVATION MUSIQUE ---
         box_musique = BoxLayout(
             orientation='horizontal',
             size_hint_y=None,
@@ -841,7 +705,6 @@ class FixedDynamicQuizApp(App):
         )
         lbl_musique.bind(size=lambda s, v: setattr(s, 'text_size', (v[0], None)))
 
-        # Utilisation des nouveaux noms de fichiers image
         img_source = 'icone_appli/song_active.png' if getattr(self, 'musique_active', True) else 'icone_appli/song_desactive.png'
         self.btn_switch_musique = Image(
             source=img_source,
@@ -856,7 +719,6 @@ class FixedDynamicQuizApp(App):
         box_musique.add_widget(self.btn_switch_musique)
         box_contenu.add_widget(box_musique)
 
-        # --- LIGNE 2 : RÉGLAGE DU VOLUME ---
         box_volume = BoxLayout(
             orientation='horizontal',
             size_hint_y=None,
@@ -886,12 +748,11 @@ class FixedDynamicQuizApp(App):
 
         self.layout_parametres.add_widget(box_contenu)
 
-        # --- BOUTON RETOUR ---
         btn_retour_param = Button(
             text="← Retour",
             font_size='18sp',
             text_size=(0.8 * Window.width - dp(20), None),
-            halign='center',        
+            halign='center',
             valign='middle',
             size_hint=(0.8, None),
             height=dp(50),
@@ -925,42 +786,37 @@ class FixedDynamicQuizApp(App):
         self.volume_musique = valeur
         if hasattr(self, 'sound') and self.sound:
             self.sound.volume = self.volume_musique
-            
+
     def fermer_menu_parametres(self, instance):
         if hasattr(self, 'layout_parametres'):
             self.root_layout.remove_widget(self.layout_parametres)
             del self.layout_parametres
-            
+
     def afficher_popup_aide(self):
-        # Contenu détaillé expliquant comment utiliser l'application et à quoi servent les boutons
         texte_explicatif = (
             "[b]Guide d'utilisation de l'application :[/b]\n\n"
             "[b]Le Quiz de Mathématiques :[/b] Conçu spécialement pour vous accompagner dans vos révisions (Algèbre, Analyse, etc.) ou générales.\n\n"
             "  - [i]Mode Quiz :[/i] Lance les séries de questions aléatoires pour tester vos compétences.\n\n"
             "  - [i]Paramètres :[/i] Permet de configurer l'application, de rejoindre la communauté du développeur et de consulter ce guide.\n\n"
             "-[i]Mode IA :[/i] Permet d'avoir une plus vaste et divers question plus avancé cellons votre classe.\n\n"
-            
             "[b]Guide d'utilisation des Paramètres :[/b]\n\n"
-            "- [i]Modifier mes informations personnelles :[/i] Permet de mettre à jour votre nom, votre niveau universitaire ou de classe, votre âge ainsi que votre sexe. Des suggestions intelligentes s'affichent automatiquement lors de la saisie.\n\n"         
-            "- [i]Consulter mes données enregistrées :[/i] Affiche un récapitulatif complet de toutes vos informations personnelles actuellement sauvegardées dans l'application.\n\n"           
-            "- [i]À propos & Version Pro :[/b] Fournit les informations sur l'application (Version , développeur Fazad Nassur) et l'accès aux fonctionnalités avancées.\n\n"         
-            "- [i]Rester connecté au Développeur :[/i] Ouvre directement le groupe WhatsApp officiel pour rejoindre la communauté, suivre les mises à jour et échanger.\n\n"          
+            "- [i]Modifier mes informations personnelles :[/i] Permet de mettre à jour votre nom, votre niveau universitaire ou de classe, votre âge ainsi que votre sexe. Des suggestions intelligentes s'affichent automatiquement lors de la saisie.\n\n"
+            "- [i]Consulter mes données enregistrées :[/i] Affiche un récapitulatif complet de toutes vos informations personnelles actuellement sauvegardées dans l'application.\n\n"
+            "- [i]À propos & Version Pro :[/b] Fournit les informations sur l'application (Version , développeur Fazad Nassur) et l'accès aux fonctionnalités avancées.\n\n"
+            "- [i]Rester connecté au Développeur :[/i] Ouvre directement le groupe WhatsApp officiel pour rejoindre la communauté, suivre les mises à jour et échanger.\n\n"
             "- [i]Comment fonctionne l'appli :[/i] Ouvre ce guide d'aide interactif pour vous orienter à tout moment dans l'utilisation de l'application.\n\n"
-            
             "• [b]Astuce :[/b] Restez connectés au Développeur via le bouton WhatsApp pour suivre les mises à jour et évolutions du Développeur !\n\n"
-            "● [b]Navigation et option:[/b]\n\n"        
-            " - [i]Entraînement :[/i] Idéal pour s'exercer à son rythme sur des séries de questions dynamiques adaptées à votre classe. Un chronomètre rythmé et un système de combo pimentent vos sessions !\n\n"           
+            "● [b]Navigation et option:[/b]\n\n"
+            " - [i]Entraînement :[/i] Idéal pour s'exercer à son rythme sur des séries de questions dynamiques adaptées à votre classe. Un chronomètre rythmé et un système de combo pimentent vos sessions !\n\n"
             " - [i]Examen Blanc :[/i] Un mode sérieux composé d'une série de 10 questions chronométrées pour tester vos connaissances en conditions réalistes et obtenir un bilan noté sur 20.\n\n"
             " - [i]Joue jusqu'à 4 :[/i] Un mode multijoueur local (de 2 à 4 participants) pour affronter vos amis et voir qui a les meilleures compétences mathématiques.\n\n"
             " - [i]Niveaux d'Activités :[/i] Un parcours progressif de 16 activités spécialisées (allant du calcul mental à la physique quantique et l'analyse) qui se débloquent selon votre rang.\n\n"
             " - [i]Sujets Casse-Tête :[/i] Des défis de logique, des paradoxes mathématiques et des énigmes algébriques pour stimuler vos neurones.\n\n"
-            
             "[b]Guide de l'Assistant IA & Menu Rapide :[/b]\n\n"
             " - [i]Étape 1 & Choix de Classe :[/i] Sélectionnez votre classe parmi les options disponibles (de la 6ème à la L1 MPC) pour adapter le niveau de difficulté.\n\n"
             " - [i]Menu Rapide (Icône Menu) :[/i] Accessible à tout moment via l'icône dédiée en haut à droite pour basculer rapidement vers l'accueil ou soumettre des requêtes libres.\n\n"
             " - [i]Requêtes & Idées Libres :[/i] Saisissez un sujet, un chapitre ou une question précise et choisissez une catégorie (Résumé du chapitre, Question, Infos sur la matière, etc.) pour interroger directement l'IA et dialoguer dans un chat interactif de suivi.\n\n"
             " - [i]Mode Examen (Simple ou Sujet Complet) :[/i] Choisissez un format d'examen personnalisé de 10 ou 20 questions avec un récapitulatif détaillé et des corrections en cas d'erreur, ou générez un sujet type contrôle officiel complet.\n\n"
-
             "[b]Guide de l'Espace Évolution :[/b]\n\n"
             " - [i]Mon Grade, XP & Rythme :[/i] Visualisez votre score de rang (PR), votre niveau d'expérience (XP) et votre jauge de progression avec une analyse intelligente de votre rythme.\n\n"
             " - [i]Liste Officielle des Rangs :[/i] Consultez la hiérarchie complète des grades disponibles, du niveau Bronze jusqu'aux sommets.\n\n"
@@ -968,20 +824,17 @@ class FixedDynamicQuizApp(App):
             "[b]Aide et Fiches de Cours :[/b]\n\n"
             " - [i]Fiches Cours :[/i] Accessible pendant les quiz pour afficher un résumé théorique et des rappels adaptés à votre classe.\n\n"
             " - [i]Démonstrations Algébriques :[/i] En cas d'erreur, une correction détaillée et rigoureuse vous est fournie pour comprendre immédiatement le raisonnement.\n\n"
-            "[b]Astuce :[/b] Utilisez le bouton d'avis au développeur pour laisser vos remarques et votre numéro WhatsApp afin d'échanger directement !" 
+            "[b]Astuce :[/b] Utilisez le bouton d'avis au développeur pour laisser vos remarques et votre numéro WhatsApp afin d'échanger directement !"
         )
-    
-        # Conteneur principal du popup avec un fond stylisé
+
         contenu = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(15))
-        
+
         with contenu.canvas.before:
-            # Fond sombre et élégant pour faire ressortir le texte
             Color(0.08, 0.12, 0.18, 1)
             contenu.fond_rect = RoundedRectangle(pos=contenu.pos, size=contenu.size, radius=[dp(25)])
         contenu.bind(pos=lambda inst, val: setattr(inst.fond_rect, 'pos', val),
                      size=lambda inst, val: setattr(inst.fond_rect, 'size', val))
 
-        # Zone de texte défilante
         scroll = ScrollView(size_hint=(1, 0.8), do_scroll_x=False)
         label = Label(
             text=texte_explicatif,
@@ -992,50 +845,47 @@ class FixedDynamicQuizApp(App):
             color=(0.95, 0.95, 0.95, 1),
             font_size='15sp'
         )
-        
-        # Ajustement automatique de la largeur et de la hauteur du texte
+
         label.bind(width=lambda s, w: setattr(s, 'text_size', (w - dp(20), None)))
-        label.bind(texture_size=lambda s, t: setattr(s, 'height', t[1]))  
+        label.bind(texture_size=lambda s, t: setattr(s, 'height', t[1]))
         scroll.add_widget(label)
-    
-        # Bouton soigné avec ombrage et coins arrondis
+
         btn_fermer = Button(
             text="J'ai compris ",
             font_size='18sp',
             bold=True,
-            halign='center',        
+            halign='center',
             valign='middle',
             size_hint=(1, 0.12),
-            background_color=(0, 0, 0, 0),  # Transparent pour laisser le canvas personnalisé agir
+            background_color=(0, 0, 0, 0),
             color=(1, 1, 1, 1)
         )
 
         with btn_fermer.canvas.before:
-            # Ombre portée douce
             Color(0, 0, 0, 0.4)
             btn_fermer.ombre = RoundedRectangle(pos=(btn_fermer.x + dp(3), btn_fermer.y - dp(3)), size=btn_fermer.size, radius=[dp(22)])
-            # Couleur vive et moderne (Bleu électrique / Cyan stylé)
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_fermer.fond = RoundedRectangle(pos=btn_fermer.pos, size=btn_fermer.size, radius=[dp(22)])
-            
+
         btn_fermer.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
         btn_fermer.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-    
+
         contenu.add_widget(scroll)
         contenu.add_widget(btn_fermer)
-    
-        # Popup global avec des bords transparents pour laisser place au design interne
+
         popup_aide = Popup(
-            title="", 
-            separator_height=0,  
+            title="",
+            separator_height=0,
             content=contenu,
             size_hint=(0.92, 0.85),
             auto_dismiss=True
         )
-    
+
+        AndroidMathWebView.masquer_tous()
+        popup_aide.bind(on_dismiss=lambda *a: AndroidMathWebView.afficher_tous())
         btn_fermer.bind(on_release=popup_aide.dismiss)
         popup_aide.open()
-      
+
     def afficher_donnees_utilisateur(self, instance):
         self.layout_parametres.clear_widgets()
         with self.layout_parametres.canvas.before:
@@ -1046,7 +896,7 @@ class FixedDynamicQuizApp(App):
             text="DONNÉES ENREGISTRÉES",
             font_size='22sp',
             text_size=(1 * Window.width - dp(20), None),
-            halign='center',        
+            halign='center',
             valign='middle',
             bold=True,
             size_hint=(1, None),
@@ -1054,31 +904,35 @@ class FixedDynamicQuizApp(App):
             pos_hint={'center_x': 0.5, 'top': 0.85}
         )
         self.layout_parametres.add_widget(lbl_titre)
-        # Récupération des variables 
         recap_texte = (
             f"Nom : {self.nom_utilisateur}\n"
+            f"Identifiant : {self.identifiant_joueur}\n"
             f"Niveau : {self.niveau_utilisateur}\n"
             f"Classe : {self.classe_utilisateur}\n"
             f"Âge : {self.age_utilisateur}\n"
             f"Sexe : {self.sexe_utilisateur}"
         )
-        
+
         lbl_data = Label(
             text=recap_texte,
             font_size='18sp',
             text_size=(0.8 * Window.width - dp(20), None),
-            halign='center',        
+            halign='center',
             valign='middle',
             size_hint=(0.8, 0.4),
             pos_hint={'center_x': 0.5, 'center_y': 0.55}
         )
         self.layout_parametres.add_widget(lbl_data)
+        btn_copie_id = bouton_neon("Copier mon identifiant", cb=self.copier_identifiant, h=50)
+        btn_copie_id.size_hint = (0.8, None)
+        btn_copie_id.pos_hint = {'center_x': 0.5, 'top': 0.36}
+        self.layout_parametres.add_widget(btn_copie_id)
 
         btn_retour_param = Button(
             text="← Retour",
             font_size='18sp',
             text_size=(0.8 * Window.width - dp(20), None),
-            halign='center',        
+            halign='center',
             valign='middle',
             size_hint=(0.8, None),
             height=dp(50),
@@ -1095,12 +949,9 @@ class FixedDynamicQuizApp(App):
             btn_retour_param.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         self.layout_parametres.add_widget(btn_retour_param)
 
-  # ___SOUS-MENUS À-PROPOS ET VERSION ___
     def afficher_a_propos(self, instance):
- #On nettoie le boutons paramètres
         self.layout_parametres.clear_widgets()
-        
-        # On ajoute un Label pour afficher les infos
+
         lbl_info = Label(
             text="Math Quiz Comores\nVersion des BETA TESTEUR pour aider a ameliore laplication grace a leurs avis avant la publication officielle\nDéveloppé par Fazad Nassur\nTous droits réservés.",
             font_size='20sp',
@@ -1112,12 +963,12 @@ class FixedDynamicQuizApp(App):
             pos_hint={'center_x': 0.5, 'center_y': 0.6}
         )
         self.layout_parametres.add_widget(lbl_info)
-        
+
         btn_retour_param = Button(
             text="Retour",
             font_size='18sp',
             text_size=(0.8 * Window.width - dp(20), None),
-            halign='center',        
+            halign='center',
             valign='middle',
             size_hint=(0.8, None),
             height=dp(50),
@@ -1134,32 +985,30 @@ class FixedDynamicQuizApp(App):
             btn_retour_param.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         self.layout_parametres.add_widget(btn_retour_param)
 
-# ___INDICATEUR DE SAISIE ___
     def afficher_formulaire_modification_infos(self, instance):
         self.fermer_menu_parametres(None)
         self.interaction_layout.clear_widgets()
         self.scroll_texte.size_hint_y = 0.15
         self.scroll_interaction.size_hint_y = 0.85
-        
+
         self.info_label.text = "Modifier vos informations"
         self.question_label.text = "Saisissez vos nouvelles informations ci-dessous :"
-        # ___DICTIONNAIRE DE SAISIE ___     
-        self.liste_niveaux_valides = ["1ère année", "2ème année", "3ème année", "6ème", "5ème", "4ème", "3ème", "2nde", "1ère", "Terminale" ]
+
+        self.liste_niveaux_valides = ["1ère année", "2ème année", "3ème année", "6ème", "5ème", "4ème", "3ème", "2nde", "1ère", "Terminale"]
         self.liste_classes_valides = ["MPC", "Collège", "Lycée"]
 
-        # Champs de saisie (TextInput)
-        self.input_nom = TextInput(text=str(getattr(self, 'nom_utilisateur', '')), hint_text="Nom d'utilisateur", size_hint_y=None, height=dp(50), background_color=(0.114, 0.459, 0.737, 1), multiline=False)
-        
-        self.input_niveau = TextInput(text=str(getattr(self, 'niveau_utilisateur', '')), hint_text="Classe(ex: 1ère année)", size_hint_y=None, height=dp(50), background_color=(0.114, 0.459, 0.737, 1), multiline=False)
-        self.suggestions_niveau_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(50))
-        
-        self.input_classe = TextInput(text=str(getattr(self, 'classe_utilisateur', '')), hint_text="Niveau(ex: MPC)", size_hint_y=None, background_color=(0.114, 0.459, 0.737, 1), height=dp(50), multiline=False)
-        self.suggestions_classe_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(50))
-        
-        self.input_age = TextInput(text=str(getattr(self, 'age_utilisateur', '')), hint_text="Âge", size_hint_y=None,background_color=(0.114, 0.459, 0.737, 1),  height=dp(50), multiline=False)
-        self.input_sexe = TextInput(text=str(getattr(self, 'sexe_utilisateur', '')), hint_text="Sexe", size_hint_y=None,background_color=(0.114, 0.459, 0.737, 1),  height=dp(50), multiline=False)
+        self.input_nom = TextInput(text=str(getattr(self, 'nom_utilisateur', '')), hint_text="Nom d'utilisateur", size_hint_y=None, height=dp(50), background_color=(0.14, 0.09, 0.32, 1), multiline=False)
 
-        btn_sauvegarder = Button(text="Enregistrer les modifications", font_size='18sp', text_size=(1 * Window.width - dp(20), None),halign='center',        valign='middle',bold=True, size_hint_y=None, height=dp(50), background_color=(0, 0, 0, 0))
+        self.input_niveau = TextInput(text=str(getattr(self, 'niveau_utilisateur', '')), hint_text="Classe(ex: 1ère année)", size_hint_y=None, height=dp(50), background_color=(0.14, 0.09, 0.32, 1), multiline=False)
+        self.suggestions_niveau_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(50))
+
+        self.input_classe = TextInput(text=str(getattr(self, 'classe_utilisateur', '')), hint_text="Niveau(ex: MPC)", size_hint_y=None, background_color=(0.14, 0.09, 0.32, 1), height=dp(50), multiline=False)
+        self.suggestions_classe_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(50))
+
+        self.input_age = TextInput(text=str(getattr(self, 'age_utilisateur', '')), hint_text="Âge", size_hint_y=None, background_color=(0.14, 0.09, 0.32, 1), height=dp(50), multiline=False)
+        self.input_sexe = TextInput(text=str(getattr(self, 'sexe_utilisateur', '')), hint_text="Sexe", size_hint_y=None, background_color=(0.14, 0.09, 0.32, 1), height=dp(50), multiline=False)
+
+        btn_sauvegarder = Button(text="Enregistrer les modifications", font_size='18sp', text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', bold=True, size_hint_y=None, height=dp(50), background_color=(0, 0, 0, 0))
         btn_sauvegarder.bind(on_press=self.sauvegarder_nouvelles_infos)
         with btn_sauvegarder.canvas.before:
             Color(0.75, 0.2, 0.2, 0.9)
@@ -1169,7 +1018,7 @@ class FixedDynamicQuizApp(App):
             btn_sauvegarder.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_sauvegarder.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        btn_retour_menu = Button(text="← Retour au menu principal", font_size='18sp',text_size=(1 * Window.width - dp(20), None),halign='center',        valign='middle', bold=True, size_hint_y=None, height=dp(50), background_color=(0, 0, 0, 0))
+        btn_retour_menu = Button(text="← Retour au menu principal", font_size='18sp', text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', bold=True, size_hint_y=None, height=dp(50), background_color=(0, 0, 0, 0))
         btn_retour_menu.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         with btn_retour_menu.canvas.before:
             Color(0.2, 0.7, 0.4, 0.9)
@@ -1180,13 +1029,13 @@ class FixedDynamicQuizApp(App):
             btn_retour_menu.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
         self.interaction_layout.add_widget(self.input_nom)
-        
+
         self.interaction_layout.add_widget(self.suggestions_niveau_layout)
         self.interaction_layout.add_widget(self.input_niveau)
-        
+
         self.interaction_layout.add_widget(self.suggestions_classe_layout)
         self.interaction_layout.add_widget(self.input_classe)
-        
+
         self.interaction_layout.add_widget(self.input_age)
         self.interaction_layout.add_widget(self.input_sexe)
         self.interaction_layout.add_widget(btn_sauvegarder)
@@ -1194,8 +1043,7 @@ class FixedDynamicQuizApp(App):
 
         self.input_niveau.bind(text=self.mettre_a_jour_suggestions_niveau)
         self.input_classe.bind(text=self.mettre_a_jour_suggestions_classe)
-        
-    # ___MISE A JOUR DES SUGGESTIONS ___    
+
     def mettre_a_jour_suggestions_niveau(self, instance, valeur):
         self.suggestions_niveau_layout.clear_widgets()
         saisie = valeur.strip().lower()
@@ -1239,8 +1087,7 @@ class FixedDynamicQuizApp(App):
     def selectionner_classe(self, choix):
         self.input_classe.text = choix
         self.suggestions_classe_layout.clear_widgets()
-        
-  # ___SAUVEGARDE LOCALE NOUVELLE INFO ___
+
     def sauvegarder_nouvelles_infos(self, instance):
         niveau_saisi = self.input_niveau.text.strip()
         classe_saisie = self.input_classe.text.strip()
@@ -1252,28 +1099,26 @@ class FixedDynamicQuizApp(App):
         if classe_saisie not in self.liste_classes_valides:
             self.question_label.text = "Erreur : Veuillez sélectionner une classe valide parmi les propositions et assurez vous que les cases classe et niveau son  saisie."
             return
-            
+
         self.nom_utilisateur = self.input_nom.text
         self.niveau_utilisateur = niveau_saisi
         self.classe_utilisateur = classe_saisie
         self.age_utilisateur = self.input_age.text
         self.sexe_utilisateur = self.input_sexe.text
-        
-        self.question_label.text = "Modifications enregistrées avec succès !"     
+
+        self.question_label.text = "Modifications enregistrées avec succès !"
         self.sauvegarder_donnees_locales()
-      
+
     def jouer_musique_fade_in(self, chemin_fichier):
         if not getattr(self, 'musique_active', True):
             return
-            
-        # 1. On arrête TOUT
+
         if self.sound:
             self.sound.stop()
             self.sound.unload()
-        
-        # 2. On charge la nouvelle musique dans le canal unique self.sound
+
         self.sound = SoundLoader.load(chemin_fichier)
-        
+
         if self.sound:
             self.sound.volume = 0
             self.sound.play()
@@ -1286,17 +1131,15 @@ class FixedDynamicQuizApp(App):
             self.sound.volume = min(volume_max, self.sound.volume + 0.1)
         else:
             return False
-            
+
     def initialiser_playlist_question(self):
-        # 1. Définir le chemin du dossier question
-        dossier_q = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'musiques', 'question')       
+        dossier_q = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'musiques', 'question')
         if not os.path.exists(dossier_q):
             self.playlist_question = []
             return
 
-        # 2. Récupérer tous les .ogg du dossier question et les trier par ordre alphabétique/numérique
         self.playlist_question = sorted([
-            os.path.join(dossier_q, f) for f in os.listdir(dossier_q) 
+            os.path.join(dossier_q, f) for f in os.listdir(dossier_q)
             if f.endswith('.ogg') and os.path.isfile(os.path.join(dossier_q, f))
         ])
         self.index_playlist_q = 0
@@ -1306,38 +1149,36 @@ class FixedDynamicQuizApp(App):
     def jouer_prochaine_musique_question(self):
         if not self.playlist_question or not getattr(self, 'musique_active', True):
             return
-            
-        # Récupérer le morceau actuel dans l'ordre
+
         morceau = self.playlist_question[self.index_playlist_q]
-        
-        # Arrêter le son précédent
+
         if self.sound:
             self.sound.stop()
             self.sound.unload()
-            
-        # Charger et jouer
+
         self.sound = SoundLoader.load(morceau)
         if self.sound:
             self.sound.volume = 0
             self.sound.play()
             Clock.schedule_interval(self.augmenter_volume, 0.2)
             print(f"Lecture en cours (Question) : {os.path.basename(morceau)}")
-            
-        # Passer au suivant pour la prochaine fois, et boucler si on arrive à la fin
+
         self.index_playlist_q = (self.index_playlist_q + 1) % len(self.playlist_question)
 
     def verifier_fin_musique_question(self, dt):
-        # Vérifie si la musique est finie pour enchaîner la suivante dans le dossier question
         if self.sound and self.sound.state == 'stop':
             if hasattr(self, 'playlist_question') and self.playlist_question and getattr(self, 'musique_active', True):
                 self.jouer_prochaine_musique_question()
 
-    def _update_rect(self, instance, value):
-        self.rect.pos = instance.pos
-        self.rect.size = instance.size
-
     def _update_text_size(self, instance, value):
         instance.text_size = value
+
+    def _lier_retour_isole(self, callback):
+        ancien = getattr(self, '_cb_retour_isole', None)
+        if ancien:
+            self.btn_retour_isole.unbind(on_press=ancien)
+        self._cb_retour_isole = callback
+        self.btn_retour_isole.bind(on_press=callback)
 
     def nettoyer_boutons_bas(self):
         if self.btn_menu_persistant in self.main_layout.children:
@@ -1353,18 +1194,17 @@ class FixedDynamicQuizApp(App):
         self.scroll_texte.add_widget(self.question_label)
         self.afficher_menu_principal_modes()
 
-    # --- OBTENTION DU RANG ACTUEL ET CALCUL DES SEUILS PARTICULIERS (FORMULE +5% PAR COLORIS MAJORITAIRE) ---
     def determiner_rang_et_details(self):
         rp_restant = self.points_de_rang
         index_rang = 0
         seuil_actuel = 10.0
-        
+
         for i in range(len(self.LISTE_RANGS)):
             index_rang = i
-            palier_majeur = i // 5  
+            palier_majeur = i // 5
             seuil_actuel = 10.0 * (1.0 + (palier_majeur * 0.05))
             seuil_arrondi = max(1, int(round(seuil_actuel)))
-            
+
             if rp_restant < seuil_arrondi:
                 break
             else:
@@ -1372,23 +1212,22 @@ class FixedDynamicQuizApp(App):
                 if i == len(self.LISTE_RANGS) - 1:
                     rp_restant = seuil_arrondi
                     break
-                    
+
         palier_majeur_actuel = index_rang // 5
         seuil_suivant = max(1, int(round(10.0 * (1.0 + (palier_majeur_actuel * 0.05)))))
-        
+
         return self.LISTE_RANGS[index_rang], int(rp_restant), seuil_suivant, index_rang
 
     def obtenir_rang_actuel(self):
         rang, _, _, _ = self.determiner_rang_et_details()
         return rang
 
-    # --- SAUVEGARDE & PERSISTANCE ---
     def sauvegarder_donnees_locales(self):
         data = {
             "nom_mascotte": self.nom_mascotte,
             "niveau_mascotte": self.niveau_mascotte,
             "identifiant_joueur": getattr(self, 'identifiant_joueur', ""),
-            "xp_mascott": self.xp_mascotte,
+            "xp_mascotte": self.xp_mascotte,
             "nom_utilisateur": self.nom_utilisateur,
             "classe_utilisateur": self.classe_utilisateur,
             "niveau_utilisateur": self.niveau_utilisateur,
@@ -1413,7 +1252,8 @@ class FixedDynamicQuizApp(App):
         try:
             with open(self.nom_fichier_sauvegarde, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
-        except Exception: pass
+        except Exception:
+            pass
 
     def charger_donnees_locales(self):
         if os.path.exists(self.nom_fichier_sauvegarde):
@@ -1424,10 +1264,10 @@ class FixedDynamicQuizApp(App):
                 self.nom_mascotte = data.get("nom_mascotte", "Locky")
                 self.niveau_mascotte = data.get("niveau_mascotte", 1)
                 self.xp_mascotte = data.get("xp_mascotte", 0)
-                self.niveau_utilisateur=data.get("niveau_utilisateur", "")
-                self.classe_utilisateur=data.get("classe_utilisateur", "")
-                self.sexe_utilisateur=data.get("sexe_utilisateur", "")
-                self.age_utilisateur=data.get("age_utilisateur", "")
+                self.niveau_utilisateur = data.get("niveau_utilisateur", "")
+                self.classe_utilisateur = data.get("classe_utilisateur", "")
+                self.sexe_utilisateur = data.get("sexe_utilisateur", "")
+                self.age_utilisateur = data.get("age_utilisateur", "")
                 self.score = data.get("score", 0)
                 self.combo = data.get("combo", 0)
                 self.niveau_actuel = data.get("niveau_actuel", "")
@@ -1441,28 +1281,29 @@ class FixedDynamicQuizApp(App):
                 self.niveau_profil = data.get("niveau_profil", 1)
                 self.points_de_rang = data.get("points_de_rang", 0)
                 self.historique_scores = data.get("historique_scores", [])
-                self.identifiant_joueur = data.get("identifiant_joueur", "") 
+                self.identifiant_joueur = data.get("identifiant_joueur", "")
                 if not self.identifiant_joueur:
                     self.identifiant_joueur = "id" + "".join([str(random.randint(0, 9)) for _ in range(6)])
-                self.file_attente_avis = data.get("file_attente_avis", [])              
+                self.file_attente_avis = data.get("file_attente_avis", [])
                 saved_stats = data.get("stats_chapitres", {})
                 for k, v in saved_stats.items():
-                    if k in self.stats_chapitres: self.stats_chapitres[k] = v
-            except Exception: pass
+                    if k in self.stats_chapitres:
+                        self.stats_chapitres[k] = v
+            except Exception:
+                pass
 
-    # --- ÉCRANS ET NAVIGATION ---
     def demander_nom_utilisateur(self):
         self.nettoyer_boutons_bas()
         self.interaction_layout.clear_widgets()
         self.scroll_texte.size_hint_y = 0.32
         self.scroll_interaction.size_hint_y = 0.68
-        
+
         self.info_label.text = f"Créateur : {self.nom_developpeur}"
         self.question_label.text = (
             "Bienvenue sur Math Quiz Comores\n\n"
             f"Développé par : {self.nom_developpeur}\n\n"
             "Entre ton prénom pour t'enregistrer :"
-    )
+        )
         self.input_nom = TextInput(
             hint_text="Ton prénom ici...",
             multiline=False,
@@ -1470,7 +1311,7 @@ class FixedDynamicQuizApp(App):
             height=dp(80),
             font_size="22sp",
             background_color=(1, 1, 1, 0)
-            )
+        )
         with self.input_nom.canvas.before:
             Color(0, 0, 0, 0.3)
             self.input_nom.ombre = RoundedRectangle(pos=(self.input_nom.x + dp(17), self.input_nom.y - dp(17)), size=self.input_nom.size, radius=[dp(27)])
@@ -1485,7 +1326,7 @@ class FixedDynamicQuizApp(App):
             height=dp(50),
             font_size="20sp",
             background_color=(0, 0, 0, 0)
-         )
+        )
         btn_valider_nom.bind(on_press=self.sauvegarder_nouveau_nom)
         with btn_valider_nom.canvas.before:
             Color(0, 0, 0, 0.3)
@@ -1494,7 +1335,7 @@ class FixedDynamicQuizApp(App):
             btn_valider_nom.fond = RoundedRectangle(pos=btn_valider_nom.pos, size=btn_valider_nom.size, radius=[dp(27)])
             btn_valider_nom.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_valider_nom.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-            
+
         self.interaction_layout.add_widget(self.input_nom)
         self.interaction_layout.add_widget(btn_valider_nom)
 
@@ -1506,22 +1347,19 @@ class FixedDynamicQuizApp(App):
         if not nom_saisi:
             self.question_label.text = "Veuillez entrer votre prénom."
             return
-        
+
         self.nom_utilisateur = nom_saisi
-        
-        # Génération de l'identifiant unique (commence par id, que des chiffres, pas d'espaces)
+
         if not getattr(self, 'identifiant_joueur', ''):
             chiffres_uniques = "".join([str(random.randint(0, 9)) for _ in range(6)])
             self.identifiant_joueur = f"id{chiffres_uniques}"
 
         self.sauvegarder_donnees_locales()
-
-        # Affichage immédiat de la fenêtre de succès avec l'identifiant unique
         self.afficher_popup_succes_identifiant(self.identifiant_joueur)
-        
+
     def afficher_popup_succes_identifiant(self, identifiant_cree):
         contenu = BoxLayout(orientation='vertical', padding=dp(25), spacing=dp(20))
-        
+
         with contenu.canvas.before:
             Color(0.08, 0.12, 0.18, 1)
             contenu.fond_rect = RoundedRectangle(pos=contenu.pos, size=contenu.size, radius=[dp(25)])
@@ -1562,8 +1400,8 @@ class FixedDynamicQuizApp(App):
             texture_size=lambda s, t: setattr(s, 'height', t[1] + dp(10))
         )
         contenu.add_widget(lbl_message)
+        contenu.add_widget(bouton_neon("Copier mon identifiant", cb=self.copier_identifiant, h=46))
 
-        # Bouton Continuer explicite
         btn_continuer = Button(
             text="Continuer",
             font_size='18sp',
@@ -1577,34 +1415,39 @@ class FixedDynamicQuizApp(App):
         with btn_continuer.canvas.before:
             Color(0, 0, 0, 0.4)
             btn_continuer.ombre = RoundedRectangle(pos=(btn_continuer.x + dp(3), btn_continuer.y - dp(3)), size=btn_continuer.size, radius=[dp(22)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_continuer.fond = RoundedRectangle(pos=btn_continuer.pos, size=btn_continuer.size, radius=[dp(22)])
-            
+
         btn_continuer.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
         btn_continuer.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-        
+
         contenu.add_widget(btn_continuer)
 
-        # auto_dismiss=True permet de fermer le popup en tapant sur le vide
         popup_id = Popup(
             title="",
             separator_height=0,
             content=contenu,
-            size_hint=(0.88, 0.68),
+            size_hint=(0.88, 0.8),
             auto_dismiss=True
         )
 
-        # Le bouton ferme le popup, et l'événement on_dismiss gère le passage au menu principal
+        AndroidMathWebView.masquer_tous()
+        popup_id.bind(on_dismiss=lambda *args: (AndroidMathWebView.afficher_tous(), self.afficher_menu_principal_modes()))
         btn_continuer.bind(on_release=popup_id.dismiss)
-        popup_id.bind(on_dismiss=lambda *args: self.afficher_menu_principal_modes())
-
         popup_id.open()
 
-    def afficher_menu_principal_modes(self):  
-        # Supprimer le bouton menu de l'IA s'il existe à l'écran
+    def afficher_menu_principal_modes(self):
+        self._arreter_poll_salon()
+        self.salon = None
+        if self.question_label.parent is not self.scroll_texte:
+            if self.question_label.parent:
+                self.question_label.parent.remove_widget(self.question_label)
+            self.scroll_texte.clear_widgets()
+            self.scroll_texte.add_widget(self.question_label)
+
         if hasattr(self, 'btn_menu_ia') and self.btn_menu_ia in self.root_layout.children:
-            self.root_layout.remove_widget(self.btn_menu_ia)       
-        # Réaffiche le bouton paramètres s'il n'y est plus (en vérifiant qu'il n'a pas déjà de parent)
+            self.root_layout.remove_widget(self.btn_menu_ia)
+
         if self.btn_parametres not in self.info_layout.children:
             if self.btn_parametres.parent:
                 self.btn_parametres.parent.remove_widget(self.btn_parametres)
@@ -1616,63 +1459,63 @@ class FixedDynamicQuizApp(App):
         self.scroll_interaction.size_hint_y = 0.68
         self.chrono_label.text = ""
         self.interaction_layout.clear_widgets()
-        
+
         rang_actuel = self.obtenir_rang_actuel()
         self.info_label.text = f"{self.nom_utilisateur}    LV:{self.niveau_profil}\n{rang_actuel}  XP:{self.xp}  RP:{self.points_de_rang}"
         self.question_label.text = f" Bienvenue sur Math Quiz, cher\n{self.nom_utilisateur}\n\nSélectionne une activité pour commencer :"
-        
-        layout_l1 = BoxLayout(orientation='horizontal', size_hint=(1, None) ,height=dp(50), spacing=dp(10))
-        
-        btn_entrainement = Button(text=" Entraînement ", font_size='22sp', text_size=(1 * Window.width - dp(20), None), halign='center',        valign='middle', bold=True, background_color=(0, 0, 0, 0), size_hint=(1,None), height=dp(50))
+
+        layout_l1 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(10))
+
+        btn_entrainement = Button(text=" Entraînement ", font_size='22sp', text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', bold=True, background_color=(0, 0, 0, 0), size_hint=(1, None), height=dp(50))
         btn_entrainement.bind(on_press=lambda x: self.selectionner_mode("Entraînement"))
         with btn_entrainement.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_entrainement.ombre = RoundedRectangle(pos=(btn_entrainement.x + dp(17), btn_entrainement.y - dp(17)), size=btn_entrainement.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_entrainement.fond = RoundedRectangle(pos=btn_entrainement.pos, size=btn_entrainement.size, radius=[dp(27)])
             btn_entrainement.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_entrainement.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         layout_l1.add_widget(btn_entrainement)
-        
-        btn_examen = Button(text="Examen Blanc ", font_size='22sp', text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', bold=True, background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+
+        btn_examen = Button(text="Examen Blanc ", font_size='22sp', text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', bold=True, background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_examen.bind(on_press=lambda x: self.selectionner_mode("Examen"))
         with btn_examen.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_examen.ombre = RoundedRectangle(pos=(btn_examen.x + dp(17), btn_examen.y - dp(17)), size=btn_examen.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_examen.fond = RoundedRectangle(pos=btn_examen.pos, size=btn_examen.size, radius=[dp(27)])
             btn_examen.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_examen.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         layout_l1.add_widget(btn_examen)
-        
+
         self.interaction_layout.add_widget(layout_l1)
-        
+
         layout_l2 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(10))
-        
-        btn_jouer_4 = Button(text="Joue jusqu'à 4", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0, 0, 0, 0))
-        btn_jouer_4.bind(on_press=self.afficher_sous_menu_joueurs)
+
+        btn_jouer_4 = Button(text="Multijoueur & Classe", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0))
+        btn_jouer_4.bind(on_press=self.afficher_hub_multijoueur)
         with btn_jouer_4.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_jouer_4.ombre = RoundedRectangle(pos=(btn_jouer_4.x + dp(17), btn_jouer_4.y - dp(17)), size=btn_jouer_4.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_jouer_4.fond = RoundedRectangle(pos=btn_jouer_4.pos, size=btn_jouer_4.size, radius=[dp(27)])
             btn_jouer_4.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_jouer_4.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         layout_l2.add_widget(btn_jouer_4)
-     
-        btn_stats = Button(text=" Salle des Rangs\n & Statistiques", font_size='22sp', text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', bold=True, background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+
+        btn_stats = Button(text=" Salle des Rangs\n & Statistiques", font_size='22sp', text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', bold=True, background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_stats.bind(on_press=self.afficher_sous_menu_evolution)
         with btn_stats.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_stats.ombre = RoundedRectangle(pos=(btn_stats.x + dp(17), btn_stats.y - dp(17)), size=btn_stats.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_stats.fond = RoundedRectangle(pos=btn_stats.pos, size=btn_stats.size, radius=[dp(27)])
             btn_stats.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_stats.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-        layout_l2.add_widget(btn_stats)    
+        layout_l2.add_widget(btn_stats)
         self.interaction_layout.add_widget(layout_l2)
 
-        btn_avis_general = Button(text=" Avis au Développeur", font_size='22sp', text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', bold=True, background_color=(0, 0, 0, 0), size_hint=(1, None), height=dp(50))
+        btn_avis_general = Button(text=" Avis au Développeur", font_size='22sp', text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', bold=True, background_color=(0, 0, 0, 0), size_hint=(1, None), height=dp(50))
         btn_avis_general.bind(on_press=self.afficher_interface_avis_general)
         with btn_avis_general.canvas.before:
             Color(0, 0, 0, 0.3)
@@ -1682,73 +1525,72 @@ class FixedDynamicQuizApp(App):
             btn_avis_general.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_avis_general.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         self.interaction_layout.add_widget(btn_avis_general)
-        
+
         layout_l3 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(10))
-        
-        btn_niveaux_activites = Button(text="Niveaux d'Activités", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0, 0, 0, 0))
+
+        btn_niveaux_activites = Button(text="Niveaux d'Activités", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0))
         btn_niveaux_activites.bind(on_press=self.afficher_sous_menu_niveaux_activites)
         with btn_niveaux_activites.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_niveaux_activites.ombre = RoundedRectangle(pos=(btn_niveaux_activites.x + dp(17), btn_niveaux_activites.y - dp(17)), size=btn_niveaux_activites.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_niveaux_activites.fond = RoundedRectangle(pos=btn_niveaux_activites.pos, size=btn_niveaux_activites.size, radius=[dp(27)])
             btn_niveaux_activites.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_niveaux_activites.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         layout_l3.add_widget(btn_niveaux_activites)
-   
-        btn_sujets = Button(text="Sujets Casse-Tête", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0, 0, 0, 0))
+
+        btn_sujets = Button(text="Sujets Casse-Tête", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0))
         btn_sujets.bind(on_press=self.afficher_sous_menu_sujets_casse_tete)
         with btn_sujets.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_sujets.ombre = RoundedRectangle(pos=(btn_sujets.x + dp(17), btn_sujets.y - dp(17)), size=btn_sujets.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_sujets.fond = RoundedRectangle(pos=btn_sujets.pos, size=btn_sujets.size, radius=[dp(27)])
             btn_sujets.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_sujets.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         layout_l3.add_widget(btn_sujets)
         self.interaction_layout.add_widget(layout_l3)
-        
+
         layout_l4 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(10))
-        
-        btn_ia = Button(text='Lancer l\'IA ', font_size='22sp', height =dp(50), bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', size_hint =(1, None), background_color=(0, 0, 0, 0))
+
+        btn_ia = Button(text='Lancer l\'IA ', font_size='22sp', height=dp(50), bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', size_hint=(1, None), background_color=(0, 0, 0, 0))
         with btn_ia.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_ia.ombre = RoundedRectangle(pos=(btn_ia.x + dp(12), btn_ia.y - dp(12)), size=btn_ia.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_ia.fond = RoundedRectangle(pos=btn_ia.pos, size=btn_ia.size, radius=[dp(27)])
             btn_ia.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_ia.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         layout_l4.add_widget(btn_ia)
         btn_ia.bind(on_press=self.afficher_menu_ia_parametres)
-        
-        btn=Button(text='bientôt ', font_size='22sp', text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', bold=True, background_color=(0, 0, 0, 0))
+
+        btn = Button(text='Joueurs & Stats en ligne', font_size='22sp', text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', bold=True, background_color=(0, 0, 0, 0))
         with btn.canvas.before:
             Color(0, 0, 0, 0.3)
             btn.ombre = RoundedRectangle(pos=(btn.x + dp(12), btn.y - dp(12)), size=btn.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn.fond = RoundedRectangle(pos=btn.pos, size=btn.size, radius=[dp(27)])
             btn.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
+        btn.bind(on_press=self.afficher_module_joueurs)
         layout_l4.add_widget(btn)
         self.interaction_layout.add_widget(layout_l4)
-        
-        btn_autres = Button(text='bientot', font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle',  size_hint=(1, None), height=dp(50), background_color=(0, 0, 0, 0))
+
+        btn_autres = Button(text='Mode Classe (Professeur / Élève)', font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', size_hint=(1, None), height=dp(50), background_color=(0, 0, 0, 0))
         with btn_autres.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_autres.ombre = RoundedRectangle(pos=(btn_autres.x + dp(12), btn_autres.y - dp(12)), size=btn_autres.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_autres.fond = RoundedRectangle(pos=btn_autres.pos, size=btn_autres.size, radius=[dp(27)])
             btn_autres.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_autres.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
+        btn_autres.bind(on_press=self.afficher_hub_multijoueur)
         self.interaction_layout.add_widget(btn_autres)
-        
-        #___SOUS-MENUS DES NIVEAUX___      
+
     def obtenir_index_palier_requis(self, nom_activite):
-                # Retire le bouton paramètres
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
 
-        # Dictionnaire mis à jour pour les 16 activités
         seuils_rangs = {
             "Calcul Mental Éclair": "Bronze I ",
             "Arithmétique de Base": "Bronze III ",
@@ -1772,8 +1614,7 @@ class FixedDynamicQuizApp(App):
             return self.LISTE_RANGS.index(nom_rang_requis)
         except ValueError:
             return 0
-            
-  # ____SOUS-MENUS NIVEAUX D'ACTIVITÉS____
+
     def afficher_sous_menu_niveaux_activites(self, instance):
         self.nettoyer_boutons_bas()
         self.scroll_texte.size_hint_y = 0.16
@@ -1794,9 +1635,8 @@ class FixedDynamicQuizApp(App):
             "Physique Quantique 101"
         ]
 
-# On calcule de la hauteur pour loger les 16 blocs 
         hauteur_totale = (len(liste_16_activites) // 2) * dp(60)
-        
+
         grille_activites = GridLayout(cols=2, spacing=dp(10), size_hint_y=None, height=hauteur_totale)
 
         for activite in liste_16_activites:
@@ -1804,7 +1644,7 @@ class FixedDynamicQuizApp(App):
             est_debloque = index_grade_actuel >= index_requis
 
             if est_debloque:
-                btn = Button(text=f"✔ {activite}", font_size='14sp', bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+                btn = Button(text=f"✔ {activite}", font_size='14sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
                 btn.bind(on_press=lambda x, act=activite: self.lancer_activite_niveau(act))
                 with btn.canvas.before:
                     Color(0, 0, 0, 0.3)
@@ -1815,23 +1655,22 @@ class FixedDynamicQuizApp(App):
                     btn.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
             else:
                 nom_rang_nom = self.LISTE_RANGS[index_requis].strip()
-                btn = Button(text=f" {activite}\n[Requis: {nom_rang_nom}]", font_size='12sp', bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+                btn = Button(text=f" {activite}\n[Requis: {nom_rang_nom}]", font_size='12sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
                 btn.bind(on_press=lambda x, r=nom_rang_nom: self.alerte_activite_verrouillee(r))
                 with btn.canvas.before:
                     Color(0, 0, 0, 0.3)
                     btn.ombre = RoundedRectangle(pos=(btn.x + dp(17), btn.y - dp(17)), size=btn.size, radius=[dp(27)])
-                    Color(0.114, 0.459, 0.737, 1)
+                    Color(0.14, 0.09, 0.32, 1)
                     btn.fond = RoundedRectangle(pos=btn.pos, size=btn.size, radius=[dp(27)])
                     btn.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
                     btn.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
             grille_activites.add_widget(btn)
 
-#ajustement de la hauteur du layout d'interaction pour permette de défiler
         self.interaction_layout.height = hauteur_totale + dp(120)
         self.interaction_layout.add_widget(grille_activites)
 
-        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(10), None),halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(10), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         self.interaction_layout.add_widget(btn_retour)
         with btn_retour.canvas.before:
@@ -1841,13 +1680,13 @@ class FixedDynamicQuizApp(App):
             btn_retour.fond = RoundedRectangle(pos=btn_retour.pos, size=btn_retour.size, radius=[dp(27)])
             btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-        
+
     def lancer_activite_niveau(self, nom_activite):
         self.interaction_layout.clear_widgets()
         self.info_label.text = f"Activité : {nom_activite}"
         self.question_label.text = f"Session de l'activité '{nom_activite}' lancée avec succès.\nBonne concentration !"
-        
-        btn_retour = Button(text="← Retour aux niveaux", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+
+        btn_retour = Button(text="← Retour aux niveaux", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_retour.bind(on_press=self.afficher_sous_menu_niveaux_activites)
         self.interaction_layout.add_widget(btn_retour)
         with btn_retour.canvas.before:
@@ -1857,13 +1696,11 @@ class FixedDynamicQuizApp(App):
             btn_retour.fond = RoundedRectangle(pos=btn_retour.pos, size=btn_retour.size, radius=[dp(27)])
             btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-    
+
     def alerte_activite_verrouillee(self, rang_requis):
         self.question_label.text = f"ACTIVITÉ VERROUILLÉE !\n\nTu dois atteindre au minimum le grade '{rang_requis}' pour débloquer cette option. Améliore ton rang !"
-        
- #___SOUS-MENUS DES SUJETS CASSE-TÊTE ___
+
     def afficher_sous_menu_sujets_casse_tete(self, instance):
-                # Retire le bouton paramètres
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
 
@@ -1874,22 +1711,22 @@ class FixedDynamicQuizApp(App):
         self.info_label.text = "Sujets Casse-Tête"
         self.question_label.text = f"Prépare tes neurones, {self.nom_utilisateur}. Sélectionne un défi logique :"
 
-        btn_paradoxes = Button(text="Paradoxes Mathématiques", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+        btn_paradoxes = Button(text="Paradoxes Mathématiques", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_paradoxes.bind(on_press=lambda x: self.lancer_sujet_casse_tete("Paradoxes"))
         with btn_paradoxes.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_paradoxes.ombre = RoundedRectangle(pos=(btn_paradoxes.x + dp(17), btn_paradoxes.y - dp(17)), size=btn_paradoxes.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_paradoxes.fond = RoundedRectangle(pos=btn_paradoxes.pos, size=btn_paradoxes.size, radius=[dp(27)])
             btn_paradoxes.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_paradoxes.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        btn_enigmes = Button(text="Énigmes Algébriques", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle',background_color =(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+        btn_enigmes = Button(text="Énigmes Algébriques", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_enigmes.bind(on_press=lambda x: self.lancer_sujet_casse_tete("Énigmes"))
         with btn_enigmes.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_enigmes.ombre = RoundedRectangle(pos=(btn_enigmes.x + dp(17), btn_enigmes.y - dp(17)), size=btn_enigmes.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_enigmes.fond = RoundedRectangle(pos=btn_enigmes.pos, size=btn_enigmes.size, radius=[dp(27)])
             btn_enigmes.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_enigmes.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
@@ -1899,12 +1736,12 @@ class FixedDynamicQuizApp(App):
         with btn_geometrie.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_geometrie.ombre = RoundedRectangle(pos=(btn_geometrie.x + dp(17), btn_geometrie.y - dp(17)), size=btn_geometrie.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_geometrie.fond = RoundedRectangle(pos=btn_geometrie.pos, size=btn_geometrie.size, radius=[dp(27)])
             btn_geometrie.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_geometrie.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         with btn_retour.canvas.before:
             Color(0, 0, 0, 0.3)
@@ -1923,8 +1760,8 @@ class FixedDynamicQuizApp(App):
         self.interaction_layout.clear_widgets()
         self.info_label.text = f"Défi : {type_defi}"
         self.question_label.text = f"Le module spécial '{type_defi}' est en cours de déploiement pour propulser ton niveau vers les sommets."
-        
-        btn_retour = Button(text="← Retour aux sujets", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+
+        btn_retour = Button(text="← Retour aux sujets", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_retour.bind(on_press=self.afficher_sous_menu_sujets_casse_tete)
         self.interaction_layout.add_widget(btn_retour)
         with btn_retour.canvas.before:
@@ -1934,12 +1771,7 @@ class FixedDynamicQuizApp(App):
             btn_retour.fond = RoundedRectangle(pos=btn_retour.pos, size=btn_retour.size, radius=[dp(27)])
             btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-        
-     #___SOUS-MENUS MODE MULTIJOUEURS___   
-     # Retire le bouton paramètres
-        if self.btn_parametres in self.info_layout.children:
-            self.info_layout.remove_widget(self.btn_parametres)
-            
+
     def afficher_sous_menu_joueurs(self, instance):
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
@@ -1950,20 +1782,19 @@ class FixedDynamicQuizApp(App):
         self.info_label.text = "Joue jusqu'à 4"
         self.question_label.text = "Affrontez-vous en multijoueur local sur le même appareil !\nAppuyez ci-dessous pour choisir le nombre de participants :"
 
-        # Bouton principal ultra stylé pour ouvrir le Popup du nombre de joueurs
         btn_ouvrir_popup = Button(
-            text="Choisir le nombre de joueurs", 
-            font_size='22sp', bold=True, 
-            text_size=(1 * Window.width - dp(20), None), 
-            halign='center', valign='middle', 
-            size_hint=(1, None), height=dp(60), 
+            text="Choisir le nombre de joueurs",
+            font_size='22sp', bold=True,
+            text_size=(1 * Window.width - dp(20), None),
+            halign='center', valign='middle',
+            size_hint=(1, None), height=dp(60),
             background_color=(0, 0, 0, 0)
         )
         btn_ouvrir_popup.bind(on_press=self.ouvrir_popup_nombre_joueurs)
         with btn_ouvrir_popup.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_ouvrir_popup.ombre = RoundedRectangle(pos=(btn_ouvrir_popup.x + dp(17), btn_ouvrir_popup.y - dp(17)), size=btn_ouvrir_popup.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_ouvrir_popup.fond = RoundedRectangle(pos=btn_ouvrir_popup.pos, size=btn_ouvrir_popup.size, radius=[dp(27)])
             btn_ouvrir_popup.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_ouvrir_popup.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
@@ -1982,11 +1813,11 @@ class FixedDynamicQuizApp(App):
 
     def ouvrir_popup_nombre_joueurs(self, instance):
         contenu = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(15))
-        
+
         lbl_titre = Label(
-            text=" CHOISISSEZ LES PARTICIPANTS ", 
-            font_size='18sp', bold=True, 
-            color=(0.114, 0.459, 0.737, 1),
+            text=" CHOISISSEZ LES PARTICIPANTS ",
+            font_size='18sp', bold=True,
+            color=(0.0, 0.94, 1.0, 1),
             size_hint_y=None, height=dp(40)
         )
         contenu.add_widget(lbl_titre)
@@ -2007,41 +1838,42 @@ class FixedDynamicQuizApp(App):
 
         for nb in range(2, 5):
             btn_nb = Button(
-                text=f" {nb} Joueurs", 
+                text=f" {nb} Joueurs",
                 font_size='18sp', bold=True,
                 background_color=(0, 0, 0, 0),
                 size_hint=(1, None), height=dp(48)
             )
             btn_nb.bind(on_press=lambda x, n=nb: [self.popup_multi.dismiss(), self.afficher_sous_menu_config_noms(n)])
-            
+
             with btn_nb.canvas.before:
                 Color(*couleurs_btn[nb-2])
                 btn_nb.fond_rect = RoundedRectangle(pos=btn_nb.pos, size=btn_nb.size, radius=[dp(12)])
                 btn_nb.bind(pos=lambda inst, val: setattr(inst.fond_rect, 'pos', val))
                 btn_nb.bind(size=lambda inst, val: setattr(inst.fond_rect, 'size', val))
             contenu.add_widget(btn_nb)
-            
+
+        AndroidMathWebView.masquer_tous()
+        self.popup_multi.bind(on_dismiss=lambda *a: AndroidMathWebView.afficher_tous())
         self.popup_multi.open()
 
     def afficher_sous_menu_config_noms(self, nb_joueurs):
         self.nb_joueurs_actuel = nb_joueurs
         self.interaction_layout.clear_widgets()
 
-        # Masquer les labels généraux pendant la configuration
         if hasattr(self, 'scroll_texte') and self.scroll_texte:
             self.scroll_texte.size_hint_y = None
             self.scroll_texte.height = 0
 
         conteneur_config = BoxLayout(
-            orientation='vertical', 
-            padding=dp(12), 
-            spacing=dp(8), 
+            orientation='vertical',
+            padding=dp(12),
+            spacing=dp(8),
             size_hint=(1, 1)
         )
 
         lbl_titre = Label(
-            text=f"NOMS & CLASSE ({nb_joueurs} JOUEURS)", 
-            font_size='16sp', bold=True, 
+            text=f"NOMS & CLASSE ({nb_joueurs} JOUEURS)",
+            font_size='16sp', bold=True,
             color=(0.95, 0.61, 0.07, 1),
             size_hint_y=None, height=dp(30)
         )
@@ -2068,7 +1900,7 @@ class FixedDynamicQuizApp(App):
             box_inputs.add_widget(inp_nom)
             self.inputs_noms.append(inp_nom)
 
-        lbl_classe = Label(text=" Classe commune :", bold=True, color=(0.114, 0.459, 0.737, 1), size_hint_y=None, height=dp(22))
+        lbl_classe = Label(text=" Classe commune :", bold=True, color=(0.0, 0.94, 1.0, 1), size_hint_y=None, height=dp(22))
         box_inputs.add_widget(lbl_classe)
 
         self.input_classe_commune = TextInput(hint_text="Ex: 3éme , Terminale...", multiline=False, size_hint_y=None, height=dp(38))
@@ -2080,9 +1912,8 @@ class FixedDynamicQuizApp(App):
 
         scroll_inputs.add_widget(box_inputs)
         conteneur_config.add_widget(scroll_inputs)
-        
+
         btn_retour = Button(text=" Etape precedente", font_size='16sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', size_hint=(0.7, None), height=dp(50), background_color=(0, 0, 0, 0))
-        
         btn_retour.bind(on_press=self.afficher_sous_menu_joueurs)
         conteneur_config.add_widget(btn_retour)
         with btn_retour.canvas.before:
@@ -2093,13 +1924,12 @@ class FixedDynamicQuizApp(App):
             btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        btn_suivant = Button(text="Étape Suivante ",font_size='16sp', bold=True, text_size=(1 * Window.width - dp(20), None), size_hint=(0.7, None), halign='center', valign='middle',  height=dp(46), background_color=(0, 0, 0, 0)
-        )
+        btn_suivant = Button(text="Étape Suivante ", font_size='16sp', bold=True, text_size=(1 * Window.width - dp(20), None), size_hint=(0.7, None), halign='center', valign='middle', height=dp(46), background_color=(0, 0, 0, 0))
         btn_suivant.bind(on_press=self.ouvrir_popup_pave_numerique_questions)
         conteneur_config.add_widget(btn_suivant)
-        
+
         self.interaction_layout.add_widget(conteneur_config)
-        
+
         with btn_suivant.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_suivant.ombre = RoundedRectangle(pos=(btn_suivant.x + dp(17), btn_suivant.y - dp(17)), size=btn_suivant.size, radius=[dp(27)])
@@ -2109,9 +1939,8 @@ class FixedDynamicQuizApp(App):
             btn_suivant.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
     def ouvrir_popup_pave_numerique_questions(self, instance):
-        # Conteneur principal avec un fond stylisé et des marges soignées
         contenu = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(15))
-        
+
         with contenu.canvas.before:
             Color(0.1, 0.13, 0.2, 1)
             contenu.bg = RoundedRectangle(pos=contenu.pos, size=contenu.size, radius=[dp(16)])
@@ -2125,7 +1954,7 @@ class FixedDynamicQuizApp(App):
             size_hint_y=None, height=dp(35),
             halign='center', valign='middle'
         )
-        lbl_titre.bind(size=lambda inst, val: setattr(inst.text_size, 'val', val))
+        lbl_titre.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
         contenu.add_widget(lbl_titre)
 
         cadre_affichage = BoxLayout(size_hint=(1, None), height=dp(55), padding=dp(5))
@@ -2137,14 +1966,13 @@ class FixedDynamicQuizApp(App):
 
         self.lbl_affichage_nb = Label(
             text="5", font_size='30sp', bold=True,
-            color=(0.2, 0.9, 0.5, 1), 
+            color=(0.2, 0.9, 0.5, 1),
             halign='center', valign='middle'
         )
         self.lbl_affichage_nb.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
         cadre_affichage.add_widget(self.lbl_affichage_nb)
         contenu.add_widget(cadre_affichage)
 
-        # Grille du pavé numérique
         pave_grid = GridLayout(cols=3, spacing=dp(8), size_hint=(1, 1))
 
         def appuyer_touche(valeur):
@@ -2159,7 +1987,7 @@ class FixedDynamicQuizApp(App):
             else:
                 if txt_actuel == "0":
                     self.lbl_affichage_nb.text = valeur
-                elif len(txt_actuel) < 2: 
+                elif len(txt_actuel) < 2:
                     self.lbl_affichage_nb.text += valeur
 
         touches = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', 'DEL']
@@ -2169,7 +1997,7 @@ class FixedDynamicQuizApp(App):
                 background_color=(0, 0, 0, 0),
                 color=(1, 1, 1, 1)
             )
-            
+
             with btn_t.canvas.before:
                 Color(0.16, 0.22, 0.32, 1) if t not in ['C', 'DEL'] else Color(0.3, 0.15, 0.18, 1)
                 btn_t.fond = RoundedRectangle(pos=btn_t.pos, size=btn_t.size, radius=[dp(10)])
@@ -2181,7 +2009,6 @@ class FixedDynamicQuizApp(App):
 
         contenu.add_widget(pave_grid)
 
-        # Barre de navigation inférieure (Retour + Validation)
         layout_actions = BoxLayout(
             orientation='horizontal',
             spacing=dp(10),
@@ -2190,8 +2017,8 @@ class FixedDynamicQuizApp(App):
         )
 
         btn_retour_pop = Button(
-            text="⬅ Retour", 
-            font_size='15sp', bold=True, 
+            text="⬅ Retour",
+            font_size='15sp', bold=True,
             size_hint=(0.4, 1),
             background_color=(0, 0, 0, 0),
             color=(1, 1, 1, 1)
@@ -2205,8 +2032,8 @@ class FixedDynamicQuizApp(App):
         layout_actions.add_widget(btn_retour_pop)
 
         btn_valider = Button(
-            text="Valider & Lancer ", 
-            font_size='15sp', bold=True, 
+            text="Valider & Lancer ",
+            font_size='15sp', bold=True,
             size_hint=(0.6, 1),
             background_color=(0, 0, 0, 0),
             color=(1, 1, 1, 1)
@@ -2223,11 +2050,14 @@ class FixedDynamicQuizApp(App):
 
         self.popup_pave = Popup(
             title="",
-            separator_height=0, 
+            separator_height=0,
             content=contenu,
             size_hint=(0.88, 0.82),
             auto_dismiss=False
         )
+
+        AndroidMathWebView.masquer_tous()
+        self.popup_pave.bind(on_dismiss=lambda *a: AndroidMathWebView.afficher_tous())
         self.popup_pave.open()
 
     def valider_et_lancer_multijoueur(self, instance):
@@ -2258,24 +2088,24 @@ class FixedDynamicQuizApp(App):
 
         if hasattr(self, 'popup_pave'):
             self.popup_pave.dismiss()
-            
+
         self.initialiser_partie_multijoueur()
 
     def mettre_a_jour_suggestions_classes(self, instance, valeur):
         self.layout_suggestions.clear_widgets()
         saisie = valeur.strip().lower()
-        
+
         if not saisie:
             self.layout_suggestions.height = dp(0)
             return
 
         suggestions = [c for c in getattr(self, 'ordre_classes', []) if saisie in c.lower()][:3]
-        
+
         if suggestions:
             self.layout_suggestions.height = dp(len(suggestions) * 30)
             for sugg in suggestions:
                 btn_sugg = Button(
-                    text=sugg, 
+                    text=sugg,
                     size_hint_y=None, height=dp(28),
                     background_color=(0, 0, 0, 0),
                     color=(1, 1, 1, 1)
@@ -2313,13 +2143,12 @@ class FixedDynamicQuizApp(App):
         self.lancer_prochain_tour_multijoueur()
 
     def lancer_prochain_tour_multijoueur(self):
-        
         if hasattr(self, 'timer_event') and self.timer_event:
             self.timer_event.cancel()
             self.timer_event = None
 
         total_tours_jeu = self.total_questions_par_joueur
-        
+
         if self.numero_question_multi > total_tours_jeu:
             self.afficher_ecran_resume_multijoueur()
             return
@@ -2330,36 +2159,31 @@ class FixedDynamicQuizApp(App):
 
         classe_commune = self.joueurs_data[0]['classe']
         chapitre_choisi = self.choisir_chapitre_aleatoire(classe_commune)
-        
-        index_g = getattr(self, 'index_grade', 1)
-        niveau_p = getattr(self, 'niveau_profil', 1)
-        
-        enonce, correct, opts, exp = MoteurMathematique.moteur_generateur_mathematique(
-            classe_cible=classe_commune,
-            chapitre_cible=chapitre_choisi,
-            index_grade=index_g,
-            niveau_profil=niveau_p
-        )
-        
-        if not enonce:
-            enonce = f"Exercice de mathématiques ({chapitre_choisi})"
-            correct = "0"
-            opts = ["0", "1", "2"]
-            exp = "Applique le cours."
 
-        # FIXATION DES OPTIONS : Mélangées
-        options_joueurs_dict = {}
-        for j in self.joueurs_data:
-            opts_copy = list(opts)
-            random.shuffle(opts_copy)
-            options_joueurs_dict[j['id']] = opts_copy
+        index_g = self.determiner_rang_et_details()[3]
+        niveau_p = getattr(self, 'niveau_profil', 1)
+
+        q = MoteurMathematique.generer_question(
+            classe_commune, chapitre_choisi,
+            index_grade=index_g,
+            niveau_profil=niveau_p,
+        )
+
+        enonce = q["enonce"] if q["enonce"] else f"Exercice de mathématiques ({chapitre_choisi})"
+        correct = q["options_txt"][q["index_correct"]]
+        opts = q["options"]
+        exp = q.get("explication_txt", "")
+        index_correct_multi = q["index_correct"]
+        options_txt_multi = q["options_txt"]
 
         self.question_en_cours_multi = {
             'chapitre': chapitre_choisi,
             'enonce': f"[{chapitre_choisi}]\n{enonce}",
-            'options_par_joueur': options_joueurs_dict,
+            'enonce_txt': q.get("enonce_txt", enonce),
+            'options_txt': options_txt_multi,
             'bonne_reponse': correct,
-            'explication': exp
+            'explication': exp,
+            'index_correct': index_correct_multi,
         }
 
         if hasattr(self, 'scroll_texte') and self.scroll_texte:
@@ -2370,14 +2194,12 @@ class FixedDynamicQuizApp(App):
         self.rafraichir_plateau_multijoueur()
 
     def rafraichir_plateau_multijoueur(self):
-
         self.interaction_layout.clear_widgets()
         conteneur_jeu = BoxLayout(orientation='vertical', spacing=dp(4), padding=dp(4), size_hint=(1, 1))
 
         nb_reponses = sum(1 for j in self.joueurs_data if j['a_repondu_tour'])
         majorite = math.ceil(len(self.joueurs_data) / 2.0)
 
-        # Affichage du Chronomètre 
         if nb_reponses >= majorite and hasattr(self, 'temps_restant'):
             txt_chrono = f"  COMPTE À REBOURS : {self.temps_restant}s !"
             col_head = (1, 0.2, 0.2, 1)
@@ -2385,7 +2207,6 @@ class FixedDynamicQuizApp(App):
             txt_chrono = ""
             col_head = (1, 1, 1, 1)
 
-        # Calcul du retour à la ligne
         lbl_head = Label(
             text=f"Question {self.numero_question_multi}/{self.total_questions_par_joueur}{txt_chrono}\n{self.question_en_cours_multi['enonce']}",
             font_size='13sp', bold=True,
@@ -2393,7 +2214,7 @@ class FixedDynamicQuizApp(App):
             size_hint=(1, None),
             halign='center', valign='middle'
         )
-        
+
         def ajuster_hauteur_enonce(instance, texture_size):
             instance.height = max(dp(65), texture_size[1] + dp(10))
 
@@ -2406,9 +2227,11 @@ class FixedDynamicQuizApp(App):
         cols_count = 2 if len(self.joueurs_data) >= 2 else 1
         plateau = GridLayout(cols=cols_count, spacing=dp(5), padding=dp(2), size_hint=(1, 1))
 
+        options_txt = self.question_en_cours_multi["options_txt"]
+
         for j in self.joueurs_data:
             zone_j = BoxLayout(orientation='vertical', padding=dp(6), spacing=dp(4), size_hint=(1, 1))
-            
+
             with zone_j.canvas.before:
                 Color(*j['couleur'])
                 zone_j.bg = RoundedRectangle(pos=zone_j.pos, size=zone_j.size, radius=[dp(8)])
@@ -2416,8 +2239,8 @@ class FixedDynamicQuizApp(App):
                 zone_j.bind(size=lambda inst, val: setattr(inst.bg, 'size', val))
 
             lbl_j_head = Label(
-                text=f"{j['nom']} ({j['score']} pts)", 
-                font_size='13sp', bold=True, 
+                text=f"{j['nom']} ({j['score']} pts)",
+                font_size='13sp', bold=True,
                 size_hint_y=None, height=dp(20)
             )
             zone_j.add_widget(lbl_j_head)
@@ -2427,12 +2250,9 @@ class FixedDynamicQuizApp(App):
                 box_opts = BoxLayout(orientation='vertical', spacing=dp(4), size_hint_y=None)
                 box_opts.bind(minimum_height=box_opts.setter('height'))
 
-       # Récupération des options pré-mélangées 
-                opts_joueur = self.question_en_cours_multi['options_par_joueur'][j['id']]
-
-                for opt in opts_joueur:
+                for idx, opt_txt in enumerate(options_txt):
                     btn_opt = Button(
-                        text=str(opt),
+                        text=str(opt_txt),
                         font_size='12sp', bold=True,
                         size_hint=(1, None),
                         background_color=(0.1, 0.1, 0.15, 0.95),
@@ -2442,15 +2262,15 @@ class FixedDynamicQuizApp(App):
                         width=lambda inst, w: setattr(inst, 'text_size', (w - dp(10), None)),
                         texture_size=lambda inst, t: setattr(inst, 'height', max(dp(36), t[1] + dp(8)))
                     )
-                    btn_opt.bind(on_press=lambda x, rep=opt, player=j: self.enregistrer_choix_joueur(player, rep))
+                    btn_opt.bind(on_press=lambda x, i_choix=idx, player=j: self.enregistrer_choix_joueur(player, i_choix))
                     box_opts.add_widget(btn_opt)
 
                 scroll_opts.add_widget(box_opts)
                 zone_j.add_widget(scroll_opts)
             else:
                 lbl_valide = Label(
-                    text="Réponse envoyée !", 
-                    font_size='12sp', bold=True, 
+                    text="Réponse envoyée !",
+                    font_size='12sp', bold=True,
                     color=(0.9, 0.9, 0.9, 0.85)
                 )
                 zone_j.add_widget(lbl_valide)
@@ -2460,10 +2280,9 @@ class FixedDynamicQuizApp(App):
         conteneur_jeu.add_widget(plateau)
         self.interaction_layout.add_widget(conteneur_jeu)
 
-    def enregistrer_choix_joueur(self, joueur, reponse):
-
+    def enregistrer_choix_joueur(self, joueur, index_choix):
         joueur['a_repondu_tour'] = True
-        joueur['reponse_tour'] = reponse
+        joueur['reponse_tour'] = index_choix
 
         nb_reponses = sum(1 for j in self.joueurs_data if j['a_repondu_tour'])
         total_joueurs = len(self.joueurs_data)
@@ -2473,7 +2292,6 @@ class FixedDynamicQuizApp(App):
             self.temps_restant = 15
             self.timer_event = Clock.schedule_interval(self.mettre_a_jour_chrono_15s, 1.0)
 
-        # Si tout le monde a répondu
         if nb_reponses == total_joueurs:
             self.valider_fin_du_tour()
         else:
@@ -2495,26 +2313,28 @@ class FixedDynamicQuizApp(App):
             self.timer_event = None
 
         q = self.question_en_cours_multi
+        index_correct = q["index_correct"]
+        options_txt = q["options_txt"]
 
         for j in self.joueurs_data:
             rep = j.get('reponse_tour')
-            
+
             if rep is not None:
-                est_correct = (str(rep).strip() == str(q['bonne_reponse']).strip())
+                est_correct = (int(rep) == int(index_correct))
                 if est_correct:
                     j['score'] += 10
-                
+
+                choix_txt = options_txt[rep] if 0 <= rep < len(options_txt) else "—"
                 self.historique_global_multi.append({
                     'joueur': j['nom'],
                     'enonce': q['enonce'],
-                    'choix': rep,
+                    'choix': choix_txt,
                     'correcte': q['bonne_reponse'],
                     'statut': est_correct,
                     'explication': q.get('explication', ''),
                     'disqualifie': False
                 })
             else:
-                # Joueur n'ayant pas répondu avant le chrono : Disqualifié du tour
                 self.historique_global_multi.append({
                     'joueur': j['nom'],
                     'enonce': q['enonce'],
@@ -2529,13 +2349,9 @@ class FixedDynamicQuizApp(App):
         self.lancer_prochain_tour_multijoueur()
 
     def afficher_ecran_resume_multijoueur(self):
-      #  self.nettoyer_bouton_bas()
         self.interaction_layout.clear_widgets()
-        #self.main_layout.clear_widgets()
         self.scroll_texte.clear_widgets()
-        #if hasattr(self, 'scroll_texte') and self.scroll_texte:
         self.scroll_texte.size_hint_y = 1.0
-    #    self.scroll_texte.height = 0
 
         self.scroll_interaction.size_hint_y = None
         self.scroll_interaction.height = 0
@@ -2591,7 +2407,7 @@ class FixedDynamicQuizApp(App):
                     pos_hint={'center_y': 0.5}
                 )
                 card_item.add_widget(img_statut)
-                
+
             couleur_texte = (0.2, 0.9, 0.4, 1) if item['statut'] else (1, 0.35, 0.35, 1)
             statut_txt = "Correct" if item['statut'] else ("Disqualifié" if item.get('disqualifie') else "Incorrect")
 
@@ -2611,7 +2427,6 @@ class FixedDynamicQuizApp(App):
                 valign='top'
             )
 
-     # Recalcul dynamique synchrone de la hauteur 
             def calculer_hauteur(instance, texture_size, carte=card_item):
                 instance.height = texture_size[1]
                 carte.height = texture_size[1] + dp(24)
@@ -2688,7 +2503,7 @@ class FixedDynamicQuizApp(App):
 
     def afficher_popup_statistiques(self, instance):
         contenu = BoxLayout(orientation='vertical', padding=dp(12), spacing=dp(8))
-        
+
         popup_stats = Popup(
             title="Classement & Statistiques",
             title_align='center',
@@ -2703,11 +2518,10 @@ class FixedDynamicQuizApp(App):
         for index, j in enumerate(joueurs_tries):
             medaille = ["1ère place", "2ème place", "3ème place", "4ème place"][index]
             txt_ligne = f"{medaille} : {j['nom']} ({j['classe']}) -> {j['score']} pts"
-            
-            # Carte colorée
+
             card_j = BoxLayout(
-                orientation='horizontal', 
-                padding=[dp(8), dp(4), dp(8), dp(4)], 
+                orientation='horizontal',
+                padding=[dp(8), dp(4), dp(8), dp(4)],
                 size_hint_y=None, height=dp(38)
             )
             with card_j.canvas.before:
@@ -2717,17 +2531,17 @@ class FixedDynamicQuizApp(App):
                 card_j.bind(size=lambda inst, val: setattr(inst.bg, 'size', val))
 
             lbl_j = Label(
-                text=txt_ligne, 
-                font_size='14sp', bold=True, 
+                text=txt_ligne,
+                font_size='14sp', bold=True,
                 color=(1, 1, 1, 1)
             )
             card_j.add_widget(lbl_j)
             contenu.add_widget(card_j)
 
         btn_fermer = Button(
-            text="Fermer", 
-            font_size='16sp', bold=True, 
-            size_hint=(1, None), height=dp(42), 
+            text="Fermer",
+            font_size='16sp', bold=True,
+            size_hint=(1, None), height=dp(42),
             background_color=(0, 0, 0, 0)
         )
         btn_fermer.bind(on_press=popup_stats.dismiss)
@@ -2740,11 +2554,11 @@ class FixedDynamicQuizApp(App):
             btn_fermer.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         contenu.add_widget(btn_fermer)
 
+        AndroidMathWebView.masquer_tous()
+        popup_stats.bind(on_dismiss=lambda *a: AndroidMathWebView.afficher_tous())
         popup_stats.open()
 
-# --- SOUS-MENUS DU PANNEAU D'ÉVOLUTION --
     def afficher_sous_menu_evolution(self, instance):
-                # Retire le bouton paramètres
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
 
@@ -2755,37 +2569,37 @@ class FixedDynamicQuizApp(App):
         self.info_label.text = " Menu Évolution"
         self.question_label.text = f"Mon cher {self.nom_utilisateur}, bienvenue dans ton espace de suivi.\nSélectionne la section à consulter :"
 
-        btn_profil_rangs = Button(text=" Mon Grade, XP & Rythme Actuel", font_size='22sp', bold=True, background_color=(0, 0, 0, 0), text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', size_hint_y=None, height=dp(50))
+        btn_profil_rangs = Button(text=" Mon Grade, XP & Rythme Actuel", font_size='22sp', bold=True, background_color=(0, 0, 0, 0), text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', size_hint_y=None, height=dp(50))
         btn_profil_rangs.bind(on_press=self.afficher_tableau_de_bord_stats)
         with btn_profil_rangs.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_profil_rangs.ombre = RoundedRectangle(pos=(btn_profil_rangs.x + dp(17), btn_profil_rangs.y - dp(17)), size=btn_profil_rangs.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_profil_rangs.fond = RoundedRectangle(pos=btn_profil_rangs.pos, size=btn_profil_rangs.size, radius=[dp(27)])
             btn_profil_rangs.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_profil_rangs.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        btn_liste_grades = Button(text=" Liste Officielle des Rangs", font_size='22sp', bold=True, background_color=(0, 0, 0, 0), text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', size_hint_y=None, height=dp(50))
+        btn_liste_grades = Button(text=" Liste Officielle des Rangs", font_size='22sp', bold=True, background_color=(0, 0, 0, 0), text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', size_hint_y=None, height=dp(50))
         btn_liste_grades.bind(on_press=self.afficher_liste_complete_des_rangs)
         with btn_liste_grades.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_liste_grades.ombre = RoundedRectangle(pos=(btn_liste_grades.x + dp(17), btn_liste_grades.y - dp(17)), size=btn_liste_grades.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_liste_grades.fond = RoundedRectangle(pos=btn_liste_grades.pos, size=btn_liste_grades.size, radius=[dp(27)])
             btn_liste_grades.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_liste_grades.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        btn_modules_maitrise = Button(text=" Maîtrise des Chapitres", font_size='22sp', bold=True, background_color=(0, 0, 0, 0), size_hint_y=None, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', height=dp(50))
+        btn_modules_maitrise = Button(text=" Maîtrise des Chapitres", font_size='22sp', bold=True, background_color=(0, 0, 0, 0), size_hint_y=None, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', height=dp(50))
         btn_modules_maitrise.bind(on_press=self.afficher_maitrise_des_modules)
         with btn_modules_maitrise.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_modules_maitrise.ombre = RoundedRectangle(pos=(btn_modules_maitrise.x + dp(17), btn_modules_maitrise.y - dp(17)), size=btn_modules_maitrise.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_modules_maitrise.fond = RoundedRectangle(pos=btn_modules_maitrise.pos, size=btn_modules_maitrise.size, radius=[dp(27)])
             btn_modules_maitrise.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_modules_maitrise.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         with btn_retour.canvas.before:
             Color(0, 0, 0, 0.3)
@@ -2804,18 +2618,17 @@ class FixedDynamicQuizApp(App):
         self.nettoyer_boutons_bas()
         self.interaction_layout.clear_widgets()
         self.scroll_texte.clear_widgets()
-        
-        # Maximiser la zone supérieure de texte et réduire l'interaction
+
         self.scroll_texte.size_hint_y = 1.0
         self.scroll_interaction.size_hint_y = None
         self.scroll_interaction.height = 0
-        
+
         self.info_label.text = "Hiérarchie des Grades"
 
         layout_liste_scroll = BoxLayout(
-            orientation='vertical', 
-            size_hint=(1, None), 
-            spacing=dp(8), 
+            orientation='vertical',
+            size_hint=(1, None),
+            spacing=dp(8),
             padding=dp(15)
         )
         layout_liste_scroll.bind(
@@ -2823,17 +2636,17 @@ class FixedDynamicQuizApp(App):
         )
 
         lbl_intro = Label(
-            text="Hiérarchie dynamique indexée sur les bonus de paliers (+5% RP requis par couleur) :", 
-            font_size='18sp', 
-            color=(0.8, 0.8, 0.8, 1), 
-            size_hint=(1, None), 
+            text="Hiérarchie dynamique indexée sur les bonus de paliers (+5% RP requis par couleur) :",
+            font_size='18sp',
+            color=(0.8, 0.8, 0.8, 1),
+            size_hint=(1, None),
             height=dp(50)
         )
         lbl_intro.bind(width=lambda inst, val: setattr(inst, 'text_size', (val - 10, None)))
         layout_liste_scroll.add_widget(lbl_intro)
-     
+        self.scroll_texte.add_widget(layout_liste_scroll)
+
         for rg in self.LISTE_RANGS:
-            # Créer un layout horizontal pour chaque rang individuellement
             layout_rang = BoxLayout(
                 orientation='horizontal',
                 size_hint_y=None,
@@ -2841,50 +2654,47 @@ class FixedDynamicQuizApp(App):
                 spacing=dp(8),
                 padding=[dp(10), dp(2)]
             )
-            
-            # Créer une image pour chaque ligne
+
             img_rang = Image(
-                source='Icone_appli/synchronisation.png',
+                source='icone_appli/sinchronisation.png',
                 size_hint=(None, None),
                 size=(dp(24), dp(24))
             )
-            
+
             lbl_rg = Label(
-                text=f"• {rg}", 
+                text=f"• {rg}",
                 font_size='20sp',
-                halign='left', 
-                size_hint=(1, None), 
+                halign='left',
+                size_hint=(1, None),
                 height=dp(55),
                 valign='middle'
             )
             lbl_rg.bind(width=lambda inst, val: setattr(inst, 'text_size', (val - 20, None)))
-            
-            # Ajouter l'image et le texte dans le layout de cette ligne
+
             layout_rang.add_widget(img_rang)
-            layout_rang.add_widget(lbl_rang)
-            
-            # Ajouter chaque ligne complète dans la zone de défilement
-            self.scroll_texte.add_widget(layout_rang)
-      
+            layout_rang.add_widget(lbl_rg)
+
+            layout_liste_scroll.add_widget(layout_rang)
+
         self.btn_retour_isole.text = "← Retour Évolution"
-        self.btn_retour_isole.bind(on_press=self.restaurer_ecran_initial_apres_stats)
+        self._lier_retour_isole(self.restaurer_ecran_initial_apres_stats)
         self.main_layout.add_widget(self.btn_retour_isole)
 
     def afficher_maitrise_des_modules(self, instance):
         self.nettoyer_boutons_bas()
         self.interaction_layout.clear_widgets()
         self.scroll_texte.clear_widgets()
-        
+
         self.scroll_texte.size_hint_y = 1.0
         self.scroll_interaction.size_hint_y = None
         self.scroll_interaction.height = 0
-        
+
         self.info_label.text = "Maîtrise des Chapitres"
 
-        layout_modules_scroll = BoxLayout(orientation='vertical', size_hint=(1,None), spacing=dp(8), padding=dp(15))
+        layout_modules_scroll = BoxLayout(orientation='vertical', size_hint=(1, None), spacing=dp(8), padding=dp(15))
         layout_modules_scroll.bind(minimum_height=layout_modules_scroll.setter('height'))
 
-        lbl_titre = Label(text="Suivi complet par module officiel :", font_size='20sp', bold=True, size_hint=(1,None), height=dp(55), color=(0.9, 0.9, 0.9, 1))
+        lbl_titre = Label(text="Suivi complet par module officiel :", font_size='20sp', bold=True, size_hint=(1, None), height=dp(55), color=(0.9, 0.9, 0.9, 1))
         layout_modules_scroll.add_widget(lbl_titre)
 
         aucun_suivi = True
@@ -2896,25 +2706,22 @@ class FixedDynamicQuizApp(App):
                 box_item = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(100), spacing=dp(5))
                 lbl_item = Label(text=f"• {chap} : {reussites}/{total} Corrects", font_size='18sp', halign='left')
                 lbl_item.bind(width=lambda inst, val: setattr(inst, 'text_size', (val - 10, None)))
-                pb = ProgressBar(max=100, value=taux, size_hint=(1,None), height=dp(25))
+                pb = ProgressBar(max=100, value=taux, size_hint=(1, None), height=dp(25))
                 box_item.add_widget(lbl_item)
                 box_item.add_widget(pb)
                 layout_modules_scroll.add_widget(box_item)
 
         if aucun_suivi:
-            lbl_vide = Label(text="Aucune statistique enregistrée pour le moment.\nCommence une partie !", font_size='20sp', halign='center', size_hint=(1,None), height=dp(150), color=(0.6, 0.6, 0.6, 1))
+            lbl_vide = Label(text="Aucune statistique enregistrée pour le moment.\nCommence une partie !", font_size='20sp', halign='center', size_hint=(1, None), height=dp(150), color=(0.6, 0.6, 0.6, 1))
             layout_modules_scroll.add_widget(lbl_vide)
 
         self.scroll_texte.add_widget(layout_modules_scroll)
 
-        # Bouton placé directement tout en bas de l'écran principal
         self.btn_retour_isole.text = "← Retour Évolution"
-        self.btn_retour_isole.bind(on_press=self.restaurer_ecran_initial_apres_stats)
+        self._lier_retour_isole(self.restaurer_ecran_initial_apres_stats)
         self.main_layout.add_widget(self.btn_retour_isole)
-        
-     # ___SOUS-MENUS DES AVIS GÉNÉRAL ___
+
     def afficher_interface_avis_general(self, instance):
-                # Retire le bouton paramètres
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
 
@@ -2924,12 +2731,12 @@ class FixedDynamicQuizApp(App):
         self.scroll_interaction.size_hint_y = 0.78
         self.info_label.text = "Retour Développeur"
         self.question_label.text = f"Mon cher ami {self.nom_utilisateur}, dis-moi ce que je devrais modifier ou ajouter dans mon application, et laisse ton numéro WhatsApp pour plus de communication, merci :"
-        
+
         self.input_avis_global = TextInput(hint_text="Écris tes remarques ici...", background_color=(0.6, 0, 0.9, 0.8), multiline=True, size_hint_y=None, height=dp(300), font_size='18sp')
-        self.input_whatsapp_global = TextInput(hint_text="Ton numéro WhatsApp (Optionnel)...", multiline=False, background_color=(0.6, 0, 0.9, 0.8),  size_hint_y=None, height=dp(100), font_size='18sp')
-        
+        self.input_whatsapp_global = TextInput(hint_text="Ton numéro WhatsApp (Optionnel)...", multiline=False, background_color=(0.6, 0, 0.9, 0.8), size_hint_y=None, height=dp(100), font_size='18sp')
+
         btn_box = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(50), spacing=dp(15))
-        btn_annuler = Button(text="Annuler", text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0, 0, 0, 0), font_size='22sp', bold=True)
+        btn_annuler = Button(text="Annuler", text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), font_size='22sp', bold=True)
         btn_annuler.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         with btn_annuler.canvas.before:
             Color(0, 0, 0, 0.3)
@@ -2938,8 +2745,8 @@ class FixedDynamicQuizApp(App):
             btn_annuler.fond = RoundedRectangle(pos=btn_annuler.pos, size=btn_annuler.size, radius=[dp(27)])
             btn_annuler.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_annuler.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-        
-        btn_envoyer = Button(text="Envoyer l'avis", text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0, 0, 0, 0), font_size='22sp', bold=True)
+
+        btn_envoyer = Button(text="Envoyer l'avis", text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), font_size='22sp', bold=True)
         btn_envoyer.bind(on_press=self.preparer_avis_general_local)
         with btn_envoyer.canvas.before:
             Color(0, 0, 0, 0.3)
@@ -2948,10 +2755,10 @@ class FixedDynamicQuizApp(App):
             btn_envoyer.fond = RoundedRectangle(pos=btn_envoyer.pos, size=btn_envoyer.size, radius=[dp(27)])
             btn_envoyer.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_envoyer.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-        
+
         btn_box.add_widget(btn_annuler)
         btn_box.add_widget(btn_envoyer)
-        
+
         self.interaction_layout.add_widget(self.input_avis_global)
         self.interaction_layout.add_widget(self.input_whatsapp_global)
         self.interaction_layout.add_widget(btn_box)
@@ -2961,28 +2768,24 @@ class FixedDynamicQuizApp(App):
         num_wa = self.input_whatsapp_global.text.strip()
         if texte_saisi:
             message_formate = f"[AVIS GÉNÉRAL ACCUEIL] [WhatsApp: {num_wa}] -> {texte_saisi}"
-            
-            # Ajout dans le dictionnaire interne unique, prêt pour la mise en queue
+
             avis_dict = {
                 "user": self.nom_utilisateur,
                 "msg": message_formate
             }
             self.file_attente_avis.append(avis_dict)
             self.sauvegarder_donnees_locales()
-            
-            # Essai d'envoi immédiat
+
             self.tenter_synchronisation_file_attente(0)
-            
+
         self.afficher_menu_principal_modes()
 
     def selectionner_mode(self, mode):
         self.mode_jeu = mode
         self.sauvegarder_donnees_locales()
         self.afficher_menu_niveaux()
-        
-    # ___MENU POUR LE CHOIX DES NIVEAUX ___
+
     def afficher_menu_niveaux(self):
-                # Retire le bouton paramètres
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
 
@@ -2991,26 +2794,26 @@ class FixedDynamicQuizApp(App):
         self.scroll_interaction.size_hint_y = 0.68
         self.info_label.text = f"Mode : {self.mode_jeu}\nChoix du Cycle"
         self.question_label.text = "Sélectionne ta catégorie d'étude :"
-        
+
         niveaux = {
-            "Cycle Collège (6ème à 3ème)": ["6ème", "5ème", "4ème", "3ème"], 
+            "Cycle Collège (6ème à 3ème)": ["6ème", "5ème", "4ème", "3ème"],
             "Cycle Lycée (2nde à Terminale)": ["2nde", "1ére", "Terminale"],
             " Université (Comores MPC)": ["1ére année", "2éme année"]
         }
-        
+
         for nv in niveaux.keys():
             btn = Button(text=nv, font_size='22sp', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
             btn.bind(on_press=lambda inst, n=nv, list_cl=niveaux[nv]: self.afficher_menu_classes(n, list_cl))
             with btn.canvas.before:
                 Color(0, 0, 0, 0.3)
                 btn.ombre = RoundedRectangle(pos=(btn.x + dp(17), btn.y - dp(17)), size=btn.size, radius=[dp(27)])
-                Color(0.114, 0.459, 0.737, 1)
+                Color(0.14, 0.09, 0.32, 1)
                 btn.fond = RoundedRectangle(pos=btn.pos, size=btn.size, radius=[dp(27)])
                 btn.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
                 btn.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
             self.interaction_layout.add_widget(btn)
 
-        btn_retour = Button(text="← Revenir à l'Accueil", size_hint_y=None, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', height=dp(50), font_size='22sp', bold=True, background_color=(0, 0, 0, 0))
+        btn_retour = Button(text="← Revenir à l'Accueil", size_hint_y=None, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', height=dp(50), font_size='22sp', bold=True, background_color=(0, 0, 0, 0))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         with btn_retour.canvas.before:
             Color(0, 0, 0, 0.3)
@@ -3020,10 +2823,8 @@ class FixedDynamicQuizApp(App):
             btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         self.interaction_layout.add_widget(btn_retour)
-        
-# ___SOUS-MENUS DE CHOIX DES CLASSES ___
+
     def afficher_menu_classes(self, niveau, list_cl):
-                # Retire le bouton paramètres 
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
 
@@ -3031,20 +2832,20 @@ class FixedDynamicQuizApp(App):
         self.scroll_texte.size_hint_y = 0.32
         self.scroll_interaction.size_hint_y = 0.68
         self.question_label.text = f"Sélectionne la classe pour charger le programme associé :"
-        
+
         for cl in list_cl:
-            btn = Button(text=cl, font_size='22sp', background_color=(0, 0, 0, 0), size_hint_y=None, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', height=dp(50))
+            btn = Button(text=cl, font_size='22sp', background_color=(0, 0, 0, 0), size_hint_y=None, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', height=dp(50))
             btn.bind(on_press=self.initialiser_session_classe)
             with btn.canvas.before:
                 Color(0, 0, 0, 0.3)
                 btn.ombre = RoundedRectangle(pos=(btn.x + dp(17), btn.y - dp(17)), size=btn.size, radius=[dp(27)])
-                Color(0.114, 0.459, 0.737, 1)
+                Color(0.14, 0.09, 0.32, 1)
                 btn.fond = RoundedRectangle(pos=btn.pos, size=btn.size, radius=[dp(27)])
                 btn.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
                 btn.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
             self.interaction_layout.add_widget(btn)
 
-        btn_retour = Button(text="← Étape Précédente", size_hint_y=None, text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', height=dp(50), font_size='22sp', bold=True, background_color=(0, 0, 0, 0))
+        btn_retour = Button(text="← Étape Précédente", size_hint_y=None, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', height=dp(50), font_size='22sp', bold=True, background_color=(0, 0, 0, 0))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_niveaux())
         with btn_retour.canvas.before:
             Color(0, 0, 0, 0.3)
@@ -3057,27 +2858,20 @@ class FixedDynamicQuizApp(App):
 
     def initialiser_session_classe(self, instance):
         self.classe_actuelle = instance.text
+        if not self.progression_officielle.get(self.classe_actuelle):
+            self.question_label.text = "Cette classe n'a pas encore de chapitres.\nChoisis-en une autre."
+            return
         self.combo = 0
-        self.score = 0  
+        self.score = 0
         self.pile_chapitres_courants = []
         self.sauvegarder_donnees_locales()
-        
-        # --- PRÉPARATION DE L'ARCHITECTURE SERVEUR ---
-#  effectuer l'envoi vers l'API d'historique
-        url_sauvegarde_serveur = "https://FazadNassur.pythonanywhere.com/api/sauvegarde"
-        data_json = json.dumps({"user": self.nom_utilisateur, "classe": self.classe_actuelle, "points": self.points_de_rang})
-        headers_api = {'Content-type': 'application/json', 'Accept': 'application/json'}
-        
-# Envoi asynchrone transparent
-        UrlRequest(url_sauvegarde_serveur, req_body=data_json, req_headers=headers_api, timeout=4, 
-                   on_success=lambda req, res: print("Données synchronisées sur le serveur."),
-                   on_failure=lambda req, res: print("Serveur inaccessible, sauvegarde locale conservée."),
-                   on_error=lambda req, res: print("Erreur réseau."))
-                   
+
+        self.synchroniser_profil(force=True)   # n'envoie que si connecté ET consentement donné
+
         self.initialiser_playlist_question()
-        Clock.unschedule(self.verifier_fin_musique_question) 
+        Clock.unschedule(self.verifier_fin_musique_question)
         Clock.schedule_interval(self.verifier_fin_musique_question, 1)
-              
+
         if self.mode_jeu == "Examen":
             liste_chapitres = list(self.progression_officielle[self.classe_actuelle])
             while len(liste_chapitres) < 10:
@@ -3086,56 +2880,51 @@ class FixedDynamicQuizApp(App):
             self.examen_questions = liste_chapitres[:10]
             self.examen_index_actuel = 0
             self.examen_reponses_eleve = []
-            self.temps_examen_restant = 300 
+            self.temps_examen_restant = 300
             self.sauvegarder_donnees_locales()
             self.lancer_chrono_examen_global()
             self.generer_question_examen()
         else:
             self.generer_question_dynamique()
 
-    # --- ÉCRAN DU FORMULAIRE DE COURS ---
     def afficher_formulaire_cours(self, instance):
         self.arreter_chrono()
         self.nettoyer_boutons_bas()
         self.interaction_layout.clear_widgets()
         self.scroll_texte.clear_widgets()
-        
-        # Maximisation de la zone supérieure de texte et réduire l'interaction
+
         self.scroll_texte.size_hint_y = 1.0
         self.scroll_interaction.size_hint_y = None
         self.scroll_interaction.height = 0
-        
+
         self.info_label.text = f" Formulaire de Cours\nClasse : {self.classe_actuelle}"
         self.chrono_label.text = ""
-        
+
         contenu_cours = self.formulaire_cours.get(self.classe_actuelle, "Aucun résumé disponible pour cette classe.")
-        
+
         lbl_cours = Label(text=contenu_cours, font_size='20sp', size_hint_y=None, halign='left', valign='top', color=(0.9, 0.9, 0.9, 1))
         lbl_cours.bind(width=lambda inst, val: setattr(inst, 'text_size', (val - 20, None)))
         lbl_cours.bind(texture_size=lambda inst, size: setattr(inst, 'height', max(size[1] + 60, 500)))
-        
+
         self.scroll_texte.add_widget(lbl_cours)
-        
-        # Bouton placé directement tout en bas de l'écran principal
+
         self.btn_retour_isole.text = "← Retour au Quiz"
-        self.btn_retour_isole.bind(on_press=self.retourner_au_quiz_apres_cours)
+        self._lier_retour_isole(self.retourner_au_quiz_apres_cours)
         self.main_layout.add_widget(self.btn_retour_isole)
 
     def retourner_au_quiz_apres_cours(self, instance):
         self.scroll_texte.clear_widgets()
         self.scroll_texte.add_widget(self.question_label)
-        
-        # Restaurer les proportions pour le jeu
+
         self.scroll_texte.size_hint_y = 0.32
         self.scroll_interaction.size_hint_y = 0.68
-        
+
         if self.mode_jeu == "Examen":
             self.lancer_chrono_examen_global()
             self.generer_question_examen()
         else:
             self.generer_question_dynamique()
 
-    # --- GESTION DU TEMPS RÈGLEMENTAIRE ---
     def lancer_chrono_entrainement(self):
         self.arreter_chrono()
         self.temps_restant = 60
@@ -3162,8 +2951,9 @@ class FixedDynamicQuizApp(App):
 
     def mettre_a_jour_chrono_examen(self, dt):
         self.temps_examen_restant -= 1
-        if self.temps_examen_restant % 5 == 0: self.sauvegarder_donnees_locales()
-            
+        if self.temps_examen_restant % 5 == 0:
+            self.sauvegarder_donnees_locales()
+
         mins = self.temps_examen_restant // 60
         secs = self.temps_examen_restant % 60
         self.chrono_label.text = f" {mins:02d}:{secs:02d}"
@@ -3186,33 +2976,31 @@ class FixedDynamicQuizApp(App):
                 while self.xp >= xp_requis:
                     self.xp -= xp_requis
                     self.niveau_profil += 1
-                        
+
         self.sauvegarder_donnees_locales()
 
-    # --- AFFICHAGE DU MODULE INDIVIDUEL : NOTATION, COMPÉTITION & RYTHME ---
     def afficher_tableau_de_bord_stats(self, instance):
         self.arreter_chrono()
         self.nettoyer_boutons_bas()
         self.interaction_layout.clear_widgets()
         self.scroll_texte.clear_widgets()
-        
-        # Maximiser la zone supérieure de texte et réduire l'interaction
+
         self.scroll_texte.size_hint_y = 1.0
         self.scroll_interaction.size_hint_y = None
         self.scroll_interaction.height = 0
-        
+
         self.info_label.text = f" Profil de Compétition"
         self.chrono_label.text = ""
-        
+
         layout_stats_scroll = BoxLayout(orientation='vertical', size_hint=(1, None), spacing=dp(20), padding=dp(15))
         layout_stats_scroll.bind(minimum_height=layout_stats_scroll.setter('height'))
-        
+
         rang_actuel, rp_courant, seuil_requis, _ = self.determiner_rang_et_details()
-        lbl_rang_titre = Label(text=f"GRADE DE SAISON : {rang_actuel}\n SCORE DE RANG : {self.points_de_rang} PR", 
-                               font_size='22sp', bold=True, size_hint=(1,None), height=dp(100), halign='center', color=(1, 0.84, 0, 1))
+        lbl_rang_titre = Label(text=f"GRADE DE SAISON : {rang_actuel}\n SCORE DE RANG : {self.points_de_rang} PR",
+                               font_size='22sp', bold=True, size_hint=(1, None), height=dp(100), halign='center', color=(1, 0.84, 0, 1))
         lbl_rang_titre.bind(width=lambda inst, val: setattr(inst, 'text_size', (val - 10, None)))
         layout_stats_scroll.add_widget(lbl_rang_titre)
-        
+
         jauge_interactive = BoxLayout(size_hint=(1, None), height=dp(60))
         with jauge_interactive.canvas.before:
             Color(0.2, 0.2, 0.25, 1)
@@ -3221,7 +3009,7 @@ class FixedDynamicQuizApp(App):
             ratio_f = min(1.0, float(rp_courant) / float(seuil_requis))
             largeur_remplissage = (jauge_interactive.size[0] - 40) * ratio_f
             self.fill_bar = Rectangle(pos=(jauge_interactive.pos[0] + 20, jauge_interactive.pos[1] + 10), size=(largeur_remplissage, 40))
-            
+
         def rafraichir_jauge(inst, val):
             _, r_c, s_r, _ = self.determiner_rang_et_details()
             self.bg_bar.pos = (inst.pos[0] + 20, inst.pos[1] + 10)
@@ -3229,13 +3017,13 @@ class FixedDynamicQuizApp(App):
             self.fill_bar.pos = (inst.pos[0] + 20, inst.pos[1] + 10)
             rat = min(1.0, float(r_c) / float(s_r))
             self.fill_bar.size = ((inst.size[0] - 40) * rat, 40)
-            
+
         jauge_interactive.bind(pos=rafraichir_jauge, size=rafraichir_jauge)
-        
-        lbl_points_restants = Label(text=f" {seuil_requis - rp_courant} PR avant le prochain Échelon !", font_size='18sp', color=(0.2, 0.8, 1, 1), size_hint=(1,None), height=dp(45))
+
+        lbl_points_restants = Label(text=f" {seuil_requis - rp_courant} PR avant le prochain Échelon !", font_size='18sp', color=(0.2, 0.8, 1, 1), size_hint=(1, None), height=dp(45))
         layout_stats_scroll.add_widget(jauge_interactive)
         layout_stats_scroll.add_widget(lbl_points_restants)
-        
+
         xp_requis = self.niveau_profil * 50
         box_xp = BoxLayout(orientation='vertical', size_hint=(1, None), height=dp(100), spacing=dp(8))
         lbl_xp = Label(text=f"Niveau du Profil : Lvl {self.niveau_profil} ({self.xp} / {xp_requis} XP)", font_size='18sp', bold=True)
@@ -3243,11 +3031,11 @@ class FixedDynamicQuizApp(App):
         box_xp.add_widget(lbl_xp)
         box_xp.add_widget(pb_xp)
         layout_stats_scroll.add_widget(box_xp)
-        
+
         lbl_analyse_vitesse = Label(size_hint_y=None, font_size='18sp', bold=True, halign='center')
         lbl_analyse_vitesse.bind(width=lambda inst, val: setattr(inst, 'text_size', (val - 10, None)))
         lbl_analyse_vitesse.bind(texture_size=lambda inst, size: setattr(inst, 'height', max(size[1] + 30, 100)))
-        
+
         if len(self.historique_scores) < 2:
             lbl_analyse_vitesse.text = "ANALYSE : En attente d'enseignements.\nEnchaîne des sessions de quiz pour tracer ta courbe !"
             lbl_analyse_vitesse.color = (0.7, 0.7, 0.7, 1)
@@ -3263,34 +3051,32 @@ class FixedDynamicQuizApp(App):
                 lbl_analyse_vitesse.text = "TRAJECTOIRE : CONSTANTE ET STABLE.\nTon niveau actuel est parfaitement ancré."
                 lbl_analyse_vitesse.color = (0.2, 0.6, 1, 1)
         layout_stats_scroll.add_widget(lbl_analyse_vitesse)
-        
+
         btn_regles_rang = Button(text="ℹ Comment fonctionne le système de Rang ?", size_hint=(1, None), height=dp(50), background_color=(0, 0, 0, 0), font_size='18sp')
         btn_regles_rang.bind(on_press=self.afficher_explication_rangs_pop)
         with btn_regles_rang.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_regles_rang.ombre = RoundedRectangle(pos=(btn_regles_rang.x + dp(17), btn_regles_rang.y - dp(17)), size=btn_regles_rang.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_regles_rang.fond = RoundedRectangle(pos=btn_regles_rang.pos, size=btn_regles_rang.size, radius=[dp(27)])
             btn_regles_rang.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_regles_rang.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         layout_stats_scroll.add_widget(btn_regles_rang)
-                
+
         self.scroll_texte.add_widget(layout_stats_scroll)
-        
-        # Bouton placé directement tout en bas de l'écran principal
+
         self.btn_retour_isole.text = "← Retour Évolution"
-        self.btn_retour_isole.bind(on_press=self.restaurer_ecran_initial_apres_stats)
+        self._lier_retour_isole(self.restaurer_ecran_initial_apres_stats)
         self.main_layout.add_widget(self.btn_retour_isole)
 
     def afficher_explication_rangs_pop(self, instance):
         self.nettoyer_boutons_bas()
         self.scroll_texte.clear_widgets()
-        
-        # S'assurer de garder l'affichage maximisé
+
         self.scroll_texte.size_hint_y = 1.0
         self.scroll_interaction.size_hint_y = None
         self.scroll_interaction.height = 0
-        
+
         texte_explicatif = (
             "SYSTÈME DE RANGS MATH QUIZ COMORES\n\n"
             "Chaque tranche de points de Compétition (PR) requis augmente de +5% à chaque changement global de couleur de grade.\n\n"
@@ -3304,37 +3090,34 @@ class FixedDynamicQuizApp(App):
         lbl_info.bind(width=lambda inst, val: setattr(inst, 'text_size', (val - 20, None)))
         lbl_info.bind(texture_size=lambda inst, size: setattr(inst, 'height', max(size[1] + 60, 500)))
         self.scroll_texte.add_widget(lbl_info)
-        
-        # Le bouton retour unique reste ancré tout en bas
+
         self.btn_retour_isole.text = "← Retour Évolution"
-        self.btn_retour_isole.bind(on_press=self.restaurer_ecran_initial_apres_stats)
+        self._lier_retour_isole(self.restaurer_ecran_initial_apres_stats)
         self.main_layout.add_widget(self.btn_retour_isole)
 
     def restaurer_ecran_initial_apres_stats(self, instance):
         self.scroll_texte.clear_widgets()
         self.scroll_texte.add_widget(self.question_label)
-        
-        # Réinitialisation des proportions normales avant d'ouvrir le sous-menu
+
         self.scroll_texte.size_hint_y = 0.32
         self.scroll_interaction.size_hint_y = 0.68
-        
+
         self.afficher_sous_menu_evolution(None)
 
-    # --- PROCESSUS ENTRAÎNEMENT RYTHMÉ ---
     def generer_question_dynamique(self):
-                # Retire le bouton paramètres
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
 
         self.interaction_layout.clear_widgets()
-        
-        # Sécurité proportions
+
         self.scroll_texte.size_hint_y = 0.22
         self.scroll_interaction.size_hint_y = 0.78
-        
-        try: idx_actuel = self.ordre_classes.index(self.classe_actuelle)
-        except ValueError: idx_actuel = 0
-            
+
+        try:
+            idx_actuel = self.ordre_classes.index(self.classe_actuelle)
+        except ValueError:
+            idx_actuel = 0
+
         if idx_actuel > 0 and random.random() < 0.30:
             classes_inferieures = self.ordre_classes[:idx_actuel]
             poids = [2**i for i in range(len(classes_inferieures))]
@@ -3353,27 +3136,44 @@ class FixedDynamicQuizApp(App):
         rang_actuel = self.obtenir_rang_actuel()
         self.info_label.text = f" {rang_actuel}\n Combo : x{self.combo}"
 
-        enonce, correct, opts, exp = self.moteur_generateur_mathematique(classe_cible, chapitre_cible)
-        self.bonne_reponse = str(correct)
-        self.explication_erreur = exp
-        self.question_generée_ia = enonce
+        q = MoteurMathematique.generer_question(
+            classe_cible, chapitre_cible,
+            index_grade=self.determiner_rang_et_details()[3],
+            niveau_profil=self.niveau_profil,
+        )
 
-# --- RENDU MATHÉMATIQUE VIA KA-TEX + WEBVIEW ---
+        self.question_courante = q
+        self.bonne_reponse = q["options_txt"][q["index_correct"]]
+        self.index_correct = q["index_correct"]
+        self.explication_erreur = q.get("explication_txt", "")
+        self.question_generee_ia = q["enonce"]
+
         self.interaction_layout.clear_widgets()
-        web = self.afficher_question_math_web(enonce, list(opts), str(correct), exp)
+        web = AndroidMathWebView(size_hint=(1, None), height=dp(190))
+        web.set_question(q, titre_tete=self.chapitre_en_cours, avec_explication=False)
         self.interaction_layout.add_widget(web)
 
-        liste_options = list(set([str(o) for o in opts]))
-        if str(correct) not in liste_options:
-            liste_options.append(str(correct))
-        random.shuffle(liste_options)
+        for i, opt_txt in enumerate(q["options_txt"]):
+            btn_opt = Button(
+                text=opt_txt,
+                font_size='20sp',
+                bold=True,
+                size_hint_y=None,
+                height=dp(50),
+                background_color=(0.14, 0.09, 0.32, 1),
+                halign='center',
+                valign='middle'
+            )
+            btn_opt.bind(size=lambda inst, val: setattr(inst, 'text_size', (val[0] - 20, None)))
+            btn_opt.bind(on_press=lambda inst, idx=i: self.verifier_choix_par_index(idx))
+            self.interaction_layout.add_widget(btn_opt)
 
         layout_actions = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(10))
 
-        btn_quitter = Button(text="← Quitter", text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1), font_size='18sp', bold=True)
+        btn_quitter = Button(text="← Quitter", text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1), font_size='18sp', bold=True)
         btn_quitter.bind(on_press=self.quitter_action)
 
-        btn_aide = Button(text="Fiches Cours", text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0.3, 0.2, 0.6, 1), font_size='18sp', bold=True)
+        btn_aide = Button(text="Fiches Cours", text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0.3, 0.2, 0.6, 1), font_size='18sp', bold=True)
         btn_aide.bind(on_press=self.afficher_formulaire_cours)
         layout_actions.add_widget(btn_quitter)
         layout_actions.add_widget(btn_aide)
@@ -3387,13 +3187,13 @@ class FixedDynamicQuizApp(App):
         self.jouer_musique_suivante()
         self.afficher_menu_principal_modes()
 
-    def verifier_choix_entrainement(self, instance):
-        self.arreter_chrono() 
+    def verifier_choix_par_index(self, index_choisi):
+        self.arreter_chrono()
         temps_mis = Clock.get_time() - self.temps_debut_question
-        choix = instance.text
         self.interaction_layout.clear_widgets()
-        
-        est_correct = (choix == self.bonne_reponse)
+
+        est_correct = (index_choisi == self.index_correct)
+        SoundManager.play("succes" if est_correct else "erreur")
         if est_correct:
             self.score += 1
             self.combo += 1
@@ -3405,49 +3205,47 @@ class FixedDynamicQuizApp(App):
             self.combo = max(0, self.combo - 2)
             self.points_de_rang = max(0, self.points_de_rang - 3)
             texte = f" ERREUR SUR CETTE NOTION.\nLa réponse attendue était : {self.bonne_reponse}.\n\n"
-            if self.explication_erreur: 
+            if self.explication_erreur:
                 texte += f"DÉVELOPPEMENT ALGÉBRIQUE RIGOUREUX :\n{self.explication_erreur}"
-        
+
         self.historique_scores.append(self.points_de_rang)
         self.enregistrer_statistique_reponse(self.chapitre_en_cours, est_correct)
+        self.synchroniser_profil()
         self.question_label.text = texte
-        
-        # --- ANIMATION AVANCÉE 
+
         taille_initiale = self.question_label.font_size
-        couleur_origine = self.question_label.color[:] 
-        
-        # Définition de la couleur du flash
+        couleur_origine = self.question_label.color[:]
+
         couleur_flash = [0.1, 0.9, 0.3, 1] if est_correct else [0.9, 0.2, 0.2, 1]
-        
+
         self.question_label.opacity = 0.3
         self.question_label.color = couleur_flash
-        
-#fondu + grossissement, puis retour à la normale
+
         anim = (
             Animation(opacity=1.0, font_size=taille_initiale * 1.25, duration=0.12, t='out_quad') +
             Animation(font_size=taille_initiale, color=couleur_origine, duration=0.25, t='out_bounce')
         )
-        anim.start(self.question_label)     
+        anim.start(self.question_label)
         self.creer_interface_suivante()
 
     def creer_interface_suivante(self):
         self.label_flou = Label(text="C'est encore flou ? Écris-nous ci-dessous :", font_size='18sp', size_hint=(1, None), height=dp(45), color=(0.8, 0.8, 0.8, 1))
         self.interaction_layout.add_widget(self.label_flou)
-        
-        self.input_avis_texte = TextInput(hint_text="Précise ta difficulté ici...", multiline=True, size_hint=(1, None), background_color=(0.6, 0, 0.9, 0.8),height=dp(100), font_size='18sp')
+
+        self.input_avis_texte = TextInput(hint_text="Précise ta difficulté ici...", multiline=True, size_hint=(1, None), background_color=(0.6, 0, 0.9, 0.8), height=dp(100), font_size='18sp')
         self.input_whatsapp_tek = TextInput(hint_text="Ton numéro WhatsApp...", multiline=False, size_hint=(1, None), background_color=(0.6, 0, 0.9, 0.8), height=dp(40), font_size='18sp')
-        
+
         self.interaction_layout.add_widget(self.input_avis_texte)
         self.interaction_layout.add_widget(self.input_whatsapp_tek)
-        
+
         self.feedback_layout = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(40), spacing=dp(10))
         for diff in ["Simple", "Abordable", "Moyen", "Complexe"]:
             btn_diff = Button(text=diff, font_size='16sp', bold=True, background_color=(0.831, 0.682, 0.216, 1))
             btn_diff.bind(on_press=lambda inst, df=diff: self.preparer_retours_developpeur_local(df))
             self.feedback_layout.add_widget(btn_diff)
         self.interaction_layout.add_widget(self.feedback_layout)
-        
-        btn_suivant = Button(text="Continuer →", font_size='22sp', bold=True, size_hint=(1,None), height=dp(50), background_color=(0.2, 0.7, 0.4, 1))
+
+        btn_suivant = Button(text="Continuer →", font_size='22sp', bold=True, size_hint=(1, None), height=dp(50), background_color=(0.2, 0.7, 0.4, 1))
         btn_suivant.bind(on_press=lambda x: self.generer_question_dynamique())
         self.interaction_layout.add_widget(btn_suivant)
 
@@ -3458,10 +3256,9 @@ class FixedDynamicQuizApp(App):
             texte_saisi = self.input_avis_texte.text.strip()
         if hasattr(self, 'input_whatsapp_tek') and self.input_whatsapp_tek.text.strip():
             whatsapp_saisi = self.input_whatsapp_tek.text.strip()
-            
-        texte_avis_complet = f"[Eval: {evaluation}] [WhatsApp: {whatsapp_saisi}] [Difficulté: {texte_saisi}] [Question: {self.question_generée_ia}]"
-        
-        # Centralisation unique dans la file d'attente du dictionnaire JSON
+
+        texte_avis_complet = f"[Eval: {evaluation}] [WhatsApp: {whatsapp_saisi}] [Difficulté: {texte_saisi}] [Question: {self.question_generee_ia}]"
+
         avis_dict = {
             "user": self.nom_utilisateur,
             "msg": texte_avis_complet
@@ -3469,21 +3266,23 @@ class FixedDynamicQuizApp(App):
         self.file_attente_avis.append(avis_dict)
         self.sauvegarder_donnees_locales()
 
-        # Essai d'envoi immédiat
         self.tenter_synchronisation_file_attente(0)
 
         self.feedback_layout.disabled = True
-        if hasattr(self, 'input_avis_texte'): self.input_avis_texte.disabled = True
-        if hasattr(self, 'input_whatsapp_tek'): self.input_whatsapp_tek.disabled = True
+        if hasattr(self, 'input_avis_texte'):
+            self.input_avis_texte.disabled = True
+        if hasattr(self, 'input_whatsapp_tek'):
+            self.input_whatsapp_tek.disabled = True
 
-         # --- ENVOI EN ARRIÈRE-PLAN VERS PYTHONANYWHERE ---
     def tenter_synchronisation_file_attente(self, dt):
         if not self.file_attente_avis:
             return
-        
-        # Vérifier que la file n'est pas vide avant de tenter l'envoi
+
+        if getattr(self, '_envoi_en_cours', False):
+            return
+        self._envoi_en_cours = True
         avis_a_envoyer = self.file_attente_avis[0]
-        url_officiel = "https://FazadNassur.pythonanywhere.com/api/avis"
+        url_officiel = self.url_api("/api/avis")
 
         try:
             data_json = json.dumps({
@@ -3498,96 +3297,99 @@ class FixedDynamicQuizApp(App):
                 req_headers=headers,
                 method='POST',
                 on_success=self.envoi_reussi,
-                on_error=self.envoi_echoue, # Vérifie que cette méthode existe !
-                on_failure=self.envoi_echoue # Important aussi pour les erreurs 400/500
+                on_error=self.envoi_echoue,
+                on_failure=self.envoi_echoue
             )
         except Exception as e:
             print(f"Erreur lors de la préparation de l'envoi : {e}")
+            self._envoi_en_cours = False
 
     def envoi_reussi(self, req, resultat):
+        self._envoi_en_cours = False
         if self.file_attente_avis:
             self.file_attente_avis.pop(0)
             self.sauvegarder_donnees_locales()
             print("Envoi réussi et liste mise à jour.")
 
     def envoi_echoue(self, req, erreur):
-        #  log l'erreur pour savoir pourquoi ça plante
+        self._envoi_en_cours = False
         print(f"Échec de l'envoi : {erreur}")
-        
-        # --- PROCESSUS EXAMEN BLANC --- 
+
     def generer_question_examen(self):
-                # Retire le bouton paramètres 
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
 
         self.interaction_layout.clear_widgets()
-        
-        # --- CONFIGURATION DES PROPORTIONS (Espace pour le haut / bas) ---
-        # On donne plus d'espace en haut pour les énoncés et explications
+
         self.scroll_texte.size_hint_y = 0.22
         self.scroll_interaction.size_hint_y = 0.78
-        
+
         chapitre_cible = self.examen_questions[self.examen_index_actuel]
         self.chapitre_en_cours = chapitre_cible
-        self.sauvegarder_donnees_locales()	
-        
-        self.info_label.text = f"MODE EXAMEN\n Question {self.examen_index_actuel + 1}/10"
-        enonce, correct, opts, exp = self.moteur_generateur_mathematique(self.classe_actuelle, chapitre_cible)
+        self.sauvegarder_donnees_locales()
 
-        self.bonne_reponse = str(correct)
-        self.explication_erreur = exp
-        
-# --- RENDU MATHÉMATIQUE VIA KA-TEX + WEBVIEW ---
+        self.info_label.text = f"MODE EXAMEN\n Question {self.examen_index_actuel + 1}/10"
+
+        q = MoteurMathematique.generer_question(
+            self.classe_actuelle, chapitre_cible,
+            index_grade=self.determiner_rang_et_details()[3],
+            niveau_profil=self.niveau_profil,
+        )
+
+        self.question_courante = q
+        self.enonce_courant = q["enonce"]
+        self.bonne_reponse = q["options_txt"][q["index_correct"]]
+        self.index_correct = q["index_correct"]
+        self.explication_erreur = q.get("explication_txt", "")
+
         self.interaction_layout.clear_widgets()
-        web = self.afficher_question_math_web(enonce, list(opts), str(correct), exp)
+        web = AndroidMathWebView(size_hint=(1, None), height=dp(190))
+        web.set_question(q, titre_tete=f"Question {self.examen_index_actuel+1}/10", avec_explication=False)
         self.interaction_layout.add_widget(web)
-      
-        liste_options = list(set([str(o) for o in opts]))
-        if str(correct) not in liste_options: 
-            liste_options.append(str(correct))
-        random.shuffle(liste_options)
-        
-        # --- 1. AJOUT DES BOUTONS DE NAVIGATION (Quitter / Fiches) TOUT EN BAS ---
+
         layout_actions = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(50), spacing=dp(10))
-        btn_quitter = Button(text="← Quitter", text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1), font_size='18sp', bold=True)
+        btn_quitter = Button(text="← Quitter", text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1), font_size='18sp', bold=True)
         btn_quitter.bind(on_press=self.quitter_action)
-        btn_aide = Button(text="Fiches Cours", text_size=(1 * Window.width - dp(20), None),halign='center', valign='middle', background_color=(0.3, 0.2, 0.6, 1), font_size='18sp', bold=True)
+        btn_aide = Button(text="Fiches Cours", text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0.3, 0.2, 0.6, 1), font_size='18sp', bold=True)
         btn_aide.bind(on_press=self.afficher_formulaire_cours)
         layout_actions.add_widget(btn_quitter)
         layout_actions.add_widget(btn_aide)
 
-        # BOUTONS DE RÉPONSES AU-DESSUS DES ACTIONS 
-        for opt in liste_options:
+        for i, opt_txt in enumerate(q["options_txt"]):
             btn_opt = Button(
-                text=opt, 
-                font_size='22sp', 
-                bold=True, 
-                size_hint_y=None, 
+                text=opt_txt,
+                font_size='22sp',
+                bold=True,
+                size_hint_y=None,
                 height=dp(50),
-                text_size=(None, None), 
-                background_color=(0.114, 0.459, 0.737, 1),
-                halign='center', 
-                valign='middle' 
+                text_size=(None, None),
+                background_color=(0.14, 0.09, 0.32, 1),
+                halign='center',
+                valign='middle'
             )
             btn_opt.padding = [10, 10]
             btn_opt.bind(size=lambda instance, value: setattr(instance, 'text_size', (value[0] - 20, None)))
-            btn_opt.bind(on_press=self.valider_choix_examen)
+            btn_opt.bind(on_press=lambda inst, idx=i: self.valider_choix_examen_par_index(idx))
             self.interaction_layout.add_widget(btn_opt)
         self.interaction_layout.add_widget(layout_actions)
 
-    def valider_choix_examen(self, instance):
-        choix = instance.text
-        # Enregistre la réponse de l'élève pour le bilan final sans interrompre l'examen
-        self.examen_reponses_eleve.append((self.question_label.text, choix, self.bonne_reponse, self.explication_erreur))
-        
-        est_correct = (choix == self.bonne_reponse)
-        if est_correct: 
+    def valider_choix_examen_par_index(self, index_choisi):
+        q = self.question_courante
+        choix_txt = q["options_txt"][index_choisi] if 0 <= index_choisi < len(q["options_txt"]) else "—"
+        self.examen_reponses_eleve.append((
+            q.get("enonce_txt", ""),
+            choix_txt,
+            q["options_txt"][q["index_correct"]],
+            q.get("explication_txt", ""),
+        ))
+
+        est_correct = (index_choisi == q["index_correct"])
+        if est_correct:
             self.score += 1
-            
+
         self.enregistrer_statistique_reponse(self.chapitre_en_cours, est_correct)
         self.examen_index_actuel += 1
-        
-        # Passe directement à la question suivante jusqu'à 10
+
         if self.examen_index_actuel < 10:
             self.generer_question_examen()
         else:
@@ -3597,10 +3399,10 @@ class FixedDynamicQuizApp(App):
     def terminer_et_afficher_bilan_examen(self):
         self.interaction_layout.clear_widgets()
         self.chrono_label.text = "FIN"
-        
+
         note_sur_20 = (self.score / 10) * 20
         self.info_label.text = f"Bilan Examen\nNote : {note_sur_20:.1f}/20"
-        
+
         if note_sur_20 >= 16:
             self.points_de_rang += 6
             mention = "EXCELLENT TRAVAIL"
@@ -3610,44 +3412,42 @@ class FixedDynamicQuizApp(App):
         else:
             self.points_de_rang = max(0, self.points_de_rang - 4)
             mention = "RÉTROGRADATION"
-            
+
         self.historique_scores.append(self.points_de_rang)
         self.sauvegarder_donnees_locales()
-        
+
         rang_actuel = self.obtenir_rang_actuel()
-        
-        # AJUSTEMENT DES PROPORTIONS : Plus d'espace pour le texte de correction (0.80 au lieu de 0.52)
+
         self.scroll_texte.size_hint_y = 0.90
         self.scroll_interaction.size_hint_y = 0.10
-        
+
         graph_widget = BoxLayout(orientation='vertical', size_hint=(1, None), height=dp(20), padding=dp(15))
         with graph_widget.canvas.before:
             Color(0.14, 0.14, 0.18, 1)
             Rectangle(pos=graph_widget.pos, size=graph_widget.size)
-        
-        lbl_rank_visuel = Label(text=f" RÉSUMÉ DE FIN DE SAISSION - {mention}\nGRADE ACTUEL : {rang_actuel}\n TOTAL SCORE : {self.points_de_rang} PR", 
+
+        lbl_rank_visuel = Label(text=f" RÉSUMÉ DE FIN DE SAISSION - {mention}\nGRADE ACTUEL : {rang_actuel}\n TOTAL SCORE : {self.points_de_rang} PR",
                                 font_size='16sp', bold=True, color=(1, 1, 1, 1), halign='center')
         graph_widget.add_widget(lbl_rank_visuel)
-        
-        jauge_box = BoxLayout(size_hint=(1, None), height=dp(40),  padding=[20, 0, 20, 0])
+
+        jauge_box = BoxLayout(size_hint=(1, None), height=dp(40), padding=[20, 0, 20, 0])
         _, rp_c, s_r, _ = self.determiner_rang_et_details()
         valeur_jauge = min(100, int((float(rp_c) / float(s_r)) * 100))
-        pb_ff_style = ProgressBar(max=100, value=valeur_jauge, size_hint=(1,None), height=dp(30))
+        pb_ff_style = ProgressBar(max=100, value=valeur_jauge, size_hint=(1, None), height=dp(30))
         jauge_box.add_widget(pb_ff_style)
         graph_widget.add_widget(jauge_box)
-        
+
         self.interaction_layout.add_widget(graph_widget)
-        
-        #  CONSTRUCTION DU BILAN PÉDAGOGIQUE DÉTAILLÉ
+
         bilan_texte = f"RÉSULTAT EXAMEN DE {self.nom_utilisateur}\nNote globale : {note_sur_20:.1f}/20\n\n"
         bilan_texte += "========================================\n"
         bilan_texte += "--- CORRECTIONS DÉTAILLÉES ---\n"
         bilan_texte += "========================================\n"
-        
+
         for i, (q, recu, bon, exp) in enumerate(self.examen_reponses_eleve):
             bilan_texte += f"\n[ Question {i+1} ]\n"
             bilan_texte += f"Énoncé : {q}\n"
-            
+
             if recu == bon:
                 bilan_texte += f"Statut : [ CORRECT ] (Votre réponse : {recu})\n"
             else:
@@ -3655,25 +3455,23 @@ class FixedDynamicQuizApp(App):
                 bilan_texte += f"• Votre réponse : {recu}\n"
                 bilan_texte += f"• Réponse attendue : {bon}\n"
                 bilan_texte += f"\n--- DÉMONSTRATION ALGÉBRIQUE ---\n{exp}\n"
-            
-            bilan_texte += "----------------------------------------\n"           
+
+            bilan_texte += "----------------------------------------\n"
         self.question_label.text = bilan_texte
-                 
- # ===ASSISTANT IA : ÉTAPE 1 (CLASSE) ====
+
     def afficher_menu_ia_parametres(self, instance):
-        # Retire le bouton paramètres en toute sécurité
         if hasattr(self, 'info_layout') and hasattr(self, 'btn_parametres'):
             if self.btn_parametres in self.info_layout.children:
                 self.info_layout.remove_widget(self.btn_parametres)
-            
+
         self.nettoyer_boutons_bas()
         self.scroll_texte.size_hint_y = 0.2
         self.scroll_interaction.size_hint_y = 0.8
         self.interaction_layout.clear_widgets()
-        
+
         self.info_label.text = "Assistant IA - Étape 1"
         self.question_label.text = f"Salut {getattr(self, 'nom_utilisateur', 'Élève')}, sélectionne d'abord ta classe :"
-        
+
         classes_disponibles = ["6ème", "5ème", "4ème", "3ème", "2nde", "1ére", "Terminale", "1ére année", "2éme année"]
         for c in classes_disponibles:
             btn = Button(
@@ -3681,7 +3479,7 @@ class FixedDynamicQuizApp(App):
                 font_size='18sp',
                 bold=True,
                 text_size=(1 * Window.width - dp(20), None),
-                halign='center', 
+                halign='center',
                 valign='middle',
                 background_color=(0, 0, 0, 0),
                 size_hint_y=None,
@@ -3692,7 +3490,7 @@ class FixedDynamicQuizApp(App):
             with btn.canvas.before:
                 Color(0, 0, 0, 0.3)
                 btn.ombre = RoundedRectangle(pos=(btn.x + dp(17), btn.y - dp(17)), size=btn.size, radius=[dp(27)])
-                Color(0.114, 0.459, 0.737, 1)
+                Color(0.14, 0.09, 0.32, 1)
                 btn.fond = RoundedRectangle(pos=btn.pos, size=btn.size, radius=[dp(27)])
                 btn.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
                 btn.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
@@ -3702,7 +3500,7 @@ class FixedDynamicQuizApp(App):
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
-            halign='center', 
+            halign='center',
             valign='middle',
             background_color=(0, 0, 0, 0),
             size_hint_y=None,
@@ -3717,8 +3515,7 @@ class FixedDynamicQuizApp(App):
             btn_retour.fond = RoundedRectangle(pos=btn_retour.pos, size=btn_retour.size, radius=[dp(27)])
             btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-        
- # --- AJOUT DU BOUTON MENU AVEC ICÔNE ---
+
         self.btn_menu_ia = Button(
             background_normal='icone_appli/menu.png',
             background_down='icone_appli/menu.png',
@@ -3728,25 +3525,20 @@ class FixedDynamicQuizApp(App):
         )
         self.btn_menu_ia.bind(on_press=self.ouvrir_panneau_menu_ia)
         self.root_layout.add_widget(self.btn_menu_ia)
-        
+
     def enregistrer_et_continuer(self, classe_choisie):
-    # Stocke la classe dans l'instance
         self.classe_choisie = classe_choisie
-    # transmetre la classe
         self.etape_selection_mode(classe_choisie)
-     
-#==== MENU LATÉRAL DE L'ASSISTANT IA ====
+
     def ouvrir_panneau_menu_ia(self, instance):
         if hasattr(self, 'layout_panneau_menu') and self.layout_panneau_menu in self.root_layout.children:
-            return          
+            return
         self.layout_panneau_menu = FloatLayout()
-        
-        # Canvas noir 
+
         with self.layout_panneau_menu.canvas.before:
-            Color(0, 0, 0, 0.98) 
+            Color(0, 0, 0, 0.98)
             self.rect_panneau = Rectangle(size=(Window.width * 0.5, Window.height), pos=(0, 0))
-            
-        # Titre du menu latéral
+
         lbl_titre_menu = Label(
             text="MENU RAPIDE",
             font_size='18sp',
@@ -3759,14 +3551,13 @@ class FixedDynamicQuizApp(App):
             pos_hint={'top': 0.9, 'x': 0}
         )
         self.layout_panneau_menu.add_widget(lbl_titre_menu)
-        
-        # ==== REQUÊTE ====        
+
         btn_requete_libre = Button(
             text="Requête & Idée personnelle",
             font_size='18sp',
             bold=True,
             text_size=(0.4 * Window.width - dp(20), None),
-            halign='center', 
+            halign='center',
             valign='middle',
             size_hint=(0.4, None),
             height=dp(50),
@@ -3787,7 +3578,7 @@ class FixedDynamicQuizApp(App):
             text=" Accueil",
             font_size='18sp',
             text_size=(0.4 * Window.width - dp(20), None),
-            halign='center', 
+            halign='center',
             valign='middle',
             bold=True,
             size_hint=(0.4, None),
@@ -3809,7 +3600,7 @@ class FixedDynamicQuizApp(App):
             text=" Fermer",
             font_size='16sp',
             text_size=(0.4 * Window.width - dp(20), None),
-            halign='center', 
+            halign='center',
             valign='middle',
             bold=True,
             size_hint=(0.4, None),
@@ -3827,26 +3618,22 @@ class FixedDynamicQuizApp(App):
             btn_fermer_menu.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_fermer_menu.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        # Ajout du panneau par-dessus l'écran actuel
         self.root_layout.add_widget(self.layout_panneau_menu)
 
     def fermer_panneau_menu_ia(self, instance):
         if hasattr(self, 'layout_panneau_menu') and self.layout_panneau_menu in self.root_layout.children:
             self.root_layout.remove_widget(self.layout_panneau_menu)
             del self.layout_panneau_menu
-            
-     # ==== CHOIX REQUÊTE =====         
+
     def afficher_formulaire_requete_libre(self, instance):
-        # Réinitialisation de l'historique lors d'une nouvelle demande
         self.historique_dialogue = []
-        
+
         self.nettoyer_boutons_bas()
         self.interaction_layout.clear_widgets()
-       
+
         self.info_label.text = "Requêtes & Suggestions Libres"
         self.question_label.text = "Tape ton sujet, chapitre ou question, puis choisis la catégorie :"
 
-        # Champ de texte pour la saisie libre
         self.saisie_requete_libre = TextInput(
             text='',
             hint_text="Ex: Intégrales, thermodynamique, ou question précise...",
@@ -3857,7 +3644,6 @@ class FixedDynamicQuizApp(App):
         )
         self.interaction_layout.add_widget(self.saisie_requete_libre)
 
-        # Catégorie sélectionnée 
         self.categorie_selectionnee = ""
         categories = ["Résumé du chapitre", "Question", "Infos sur la matière", "Infos du chapitre", "Autre"]
         self.boutons_categories = []
@@ -3865,9 +3651,9 @@ class FixedDynamicQuizApp(App):
         for cat in categories:
             est_coche = (cat == self.categorie_selectionnee)
             img_fond = 'icone_appli/box_cocher.png' if est_coche else 'icone_appli/box_non_cocher.png'
-            
+
             btn_cat = Button(
-                text=f"    {cat}",  
+                text=f"    {cat}",
                 font_size='12sp',
                 bold=True,
                 text_size=(1 * Window.width - dp(20), None),
@@ -3884,7 +3670,6 @@ class FixedDynamicQuizApp(App):
             self.boutons_categories.append(btn_cat)
             self.interaction_layout.add_widget(btn_cat)
 
-        # Bouton d'envoi des données
         btn_envoyer = Button(
             text="Envoyer ma demande",
             font_size='18sp',
@@ -3895,7 +3680,7 @@ class FixedDynamicQuizApp(App):
         )
         btn_envoyer.bind(on_press=self.envoyer_requete_utilisateur_api)
         self.interaction_layout.add_widget(btn_envoyer)
-        
+
         with btn_envoyer.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_envoyer.ombre = RoundedRectangle(pos=(btn_envoyer.x + dp(17), btn_envoyer.y - dp(17)), size=btn_envoyer.size, radius=[dp(27)])
@@ -3904,7 +3689,6 @@ class FixedDynamicQuizApp(App):
             btn_envoyer.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_envoyer.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        # Bouton Retour
         btn_retour = Button(
             text="⬅ Retour",
             font_size='18sp',
@@ -3913,9 +3697,9 @@ class FixedDynamicQuizApp(App):
             height=dp(50),
             background_color=(0, 0, 0, 0)
         )
-        btn_retour.bind(on_press=lambda x: self.etape_selection_mode(getattr(self, 'niveau_actuelle', '')))
+        btn_retour.bind(on_press=lambda x: self.etape_selection_mode(getattr(self, 'classe_choisie', '')))
         self.interaction_layout.add_widget(btn_retour)
-        
+
         with btn_retour.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_retour.ombre = RoundedRectangle(pos=(btn_retour.x + dp(17), btn_retour.y - dp(17)), size=btn_retour.size, radius=[dp(27)])
@@ -3938,12 +3722,11 @@ class FixedDynamicQuizApp(App):
         texte_utilisateur = self.saisie_requete_libre.text.strip()
         if not texte_utilisateur:
             self.question_label.text = "Veuillez saisir un texte avant d'envoyer !"
-            return          
-        
-        # --- GESTION DE LA LIMITE (8 requêtes par minute max) ---
+            return
+
         if not hasattr(self, 'historique_requetes_temps'):
             self.historique_requetes_temps = []
-        
+
         temps_actuel = time.time()
         self.historique_requetes_temps = [t for t in self.historique_requetes_temps if temps_actuel - t < 60]
 
@@ -3953,11 +3736,10 @@ class FixedDynamicQuizApp(App):
 
         self.historique_requetes_temps.append(temps_actuel)
 
-        # Enregistrement du premier message dans l'historique de discussion
         self.historique_dialogue = [{"role": "user", "texte": texte_utilisateur}]
 
-        url = "https://fazadnassur.pythonanywhere.com/api/avis"
-        
+        url = self.url_api("/api/avis")
+
         donnees = {
             "profil": {
                 "utilisateur": getattr(self, 'nom_utilisateur', ''),
@@ -3972,16 +3754,16 @@ class FixedDynamicQuizApp(App):
             "categorie": self.categorie_selectionnee,
             "requete": texte_utilisateur
         }
-     
+
         headers = {'Content-Type': 'application/json'}
-        
+
         UrlRequest(
             url,
             req_body=json.dumps(donnees),
             req_headers=headers,
             method='POST',
             on_error=lambda req, err: setattr(self.question_label, 'text', f"Erreur d'envoi : {err}")
-        )        
+        )
 
         self.question_label.text = f"L'IA traite ta demande ({self.categorie_selectionnee})...\nSujet : {texte_utilisateur}"
         self.generer_reponse_ia_libre(texte_utilisateur, self.categorie_selectionnee)
@@ -3990,26 +3772,21 @@ class FixedDynamicQuizApp(App):
         self.interaction_layout.clear_widgets()
         self.info_label.text = f"Requête Libre - {categorie}"
         self.question_label.text = f"Génération en cours pour '{requete}' dans la catégorie [{categorie}]..."
-        
-        url = "https://fazadnassur.pythonanywhere.com/api/requete_libre"
-        
+
+        url = self.url_api("/api/requete_libre")
+
         donnees_requete = {
-            "profil": {
-                "utilisateur": getattr(self, 'nom_utilisateur', ''),
-                "identifiant": getattr(self, 'identifiant_joueur', ''),
-                "sexe": getattr(self, 'sexe_utilisateur', ''),
-                "classe": getattr(self, 'classe_utilisateur', getattr(self, 'classe_choisie', '')),
-                "niveau_utilisateur": getattr(self, 'niveau_utilisateur', ''),
-                "niveau_profil_xp": getattr(self, 'niveau_profil', 1),
-                "points_de_rang": getattr(self, 'points_de_rang', 0),
-                "grade_actuel": self.obtenir_rang_actuel() if hasattr(self, 'obtenir_rang_actuel') else "Bronze I"
-            },
+            "utilisateur": getattr(self, 'nom_utilisateur', ''),
+            "identifiant": getattr(self, 'identifiant_joueur', ''),
+            "classe": getattr(self, 'classe_utilisateur', getattr(self, 'classe_choisie', '')),
+            "niveau_utilisateur": getattr(self, 'niveau_utilisateur', ''),
+            "grade_actuel": self.obtenir_rang_actuel() if hasattr(self, 'obtenir_rang_actuel') else "Bronze I",
             "chapitre": requete,
             "mode": categorie
         }
 
         headers = {'Content-Type': 'application/json'}
-        
+
         UrlRequest(
             url,
             req_body=json.dumps(donnees_requete),
@@ -4018,7 +3795,7 @@ class FixedDynamicQuizApp(App):
             on_success=lambda req, res: self.afficher_discussion_ia(res, requete, categorie),
             on_error=lambda req, err: setattr(self.question_label, 'text', f'Erreur génération IA : {err}')
         )
-        
+
         btn_retour = Button(
             text="⬅ Retour",
             font_size='18sp',
@@ -4029,7 +3806,7 @@ class FixedDynamicQuizApp(App):
         )
         btn_retour.bind(on_press=lambda x: self.afficher_formulaire_requete_libre(None))
         self.interaction_layout.add_widget(btn_retour)
-        
+
         with btn_retour.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_retour.ombre = RoundedRectangle(pos=(btn_retour.x + dp(17), btn_retour.y - dp(17)), size=btn_retour.size, radius=[dp(27)])
@@ -4037,21 +3814,20 @@ class FixedDynamicQuizApp(App):
             btn_retour.fond = RoundedRectangle(pos=btn_retour.pos, size=btn_retour.size, radius=[dp(27)])
             btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-            
+
     def afficher_discussion_ia(self, resultat, requete_initiale, categorie):
-        
         self.scroll_texte.size_hint_y = 1.0
         self.scroll_interaction.size_hint_y = None
         self.scroll_interaction.height = 0
-        
+
         if isinstance(resultat, str):
             try:
                 resultat = json.loads(resultat)
             except Exception:
                 resultat = {"reponse": resultat}
-            
+
         reponse_texte = resultat.get("reponse", resultat.get("enonce", "Aucune réponse générée."))
-        
+
         if not hasattr(self, 'historique_dialogue') or not self.historique_dialogue:
             self.historique_dialogue = [
                 {"role": "user", "texte": requete_initiale},
@@ -4061,8 +3837,7 @@ class FixedDynamicQuizApp(App):
             self.historique_dialogue.append({"role": "ia", "texte": reponse_texte})
 
         self.interaction_layout.clear_widgets()
-        
-        # S'assurer que le layout principal ne suit pas la hauteur de ses enfants
+
         self.interaction_layout.size_hint_y = 1
         self.interaction_layout.height = Window.height
         self.interaction_layout.orientation = 'vertical'
@@ -4072,13 +3847,12 @@ class FixedDynamicQuizApp(App):
         self.info_label.text = f"Requête Libre - {categorie}"
         self.question_label.text = ""
 
-        # --- 1. ZONE CHAT (Prend TOUT l'espace disponible haut/milieu) ---
         self.scroll_chat = ScrollView(
             size_hint=(1, 1),
             do_scroll_x=False,
             do_scroll_y=True
         )
-        
+
         self.box_messages = BoxLayout(
             orientation='vertical',
             size_hint_y=None,
@@ -4089,7 +3863,6 @@ class FixedDynamicQuizApp(App):
         self.scroll_chat.add_widget(self.box_messages)
         self.interaction_layout.add_widget(self.scroll_chat)
 
-        # --- 2. CONTENEUR FIXE EN BAS (Bloque la zone de saisie et le bouton retour) ---
         zone_bas = BoxLayout(
             orientation='vertical',
             size_hint=(1, None),
@@ -4097,21 +3870,20 @@ class FixedDynamicQuizApp(App):
         )
         zone_bas.bind(minimum_height=zone_bas.setter('height'))
 
-        # Zone de saisie
         self.box_saisie = BoxLayout(
             orientation='horizontal',
             size_hint=(1, None),
             height=dp(48),
             spacing=dp(5)
         )
-        
+
         self.input_relance = TextInput(
             hint_text="Poser une question de suivi...",
             multiline=True,
             font_size='14sp',
             size_hint=(0.75, 1)
         )
-        
+
         btn_relancer = Button(
             text="Envoyer",
             font_size='14sp',
@@ -4120,12 +3892,11 @@ class FixedDynamicQuizApp(App):
             background_color=(0.2, 0.7, 0.4, 1)
         )
         btn_relancer.bind(on_press=lambda inst: self.envoyer_relance_directe(requete_initiale, categorie))
-        
+
         self.box_saisie.add_widget(self.input_relance)
         self.box_saisie.add_widget(btn_relancer)
         zone_bas.add_widget(self.box_saisie)
 
-        # Bouton Retour
         btn_retour = Button(
             text="⬅ Retour aux requêtes",
             font_size='16sp',
@@ -4136,7 +3907,7 @@ class FixedDynamicQuizApp(App):
         )
         btn_retour.bind(on_press=lambda x: self.afficher_formulaire_requete_libre(None))
         zone_bas.add_widget(btn_retour)
-        
+
         with btn_retour.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_retour.ombre = RoundedRectangle(pos=(btn_retour.x + dp(3), btn_retour.y - dp(3)), size=btn_retour.size, radius=[dp(27)])
@@ -4145,15 +3916,11 @@ class FixedDynamicQuizApp(App):
             btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        # Ajout du bloc bas dans le layout principal
         self.interaction_layout.add_widget(zone_bas)
 
-        # Afficher les messages dans le ScrollView
         self.rafraichir_bulles_dialogue()
 
-
     def rafraichir_bulles_dialogue(self):
-        """Met à jour uniquement le contenu interne du ScrollView."""
         self.box_messages.clear_widgets()
 
         for msg in self.historique_dialogue:
@@ -4166,7 +3933,7 @@ class FixedDynamicQuizApp(App):
             )
 
             prefixe = "[b]Vous :[/b] " if is_user else "[b]IA :[/b] "
-            
+
             lbl_message = Label(
                 text=prefixe + msg["texte"],
                 markup=True,
@@ -4184,7 +3951,7 @@ class FixedDynamicQuizApp(App):
                     Color(0, 0, 0, 0.9)
                 else:
                     Color(0.15, 0.25, 0.35, 0.95)
-                
+
                 lbl_message.bg_rect = RoundedRectangle(pos=lbl_message.pos, size=lbl_message.size, radius=[dp(10)])
                 lbl_message.bind(
                     pos=lambda inst, val: setattr(inst.bg_rect, 'pos', val),
@@ -4201,20 +3968,16 @@ class FixedDynamicQuizApp(App):
             lbl_message.bind(size=lambda inst, val: setattr(ligne_container, 'height', val[1] + dp(4)))
             self.box_messages.add_widget(ligne_container)
 
-        # Recalcule le défilement vers le bas sans déplacer les éléments d'interface
         self.scroll_chat.scroll_y = 0
-
 
     def envoyer_relance_directe(self, requete_initiale, categorie):
         txt = self.input_relance.text.strip()
         if not txt:
             return
 
-        # 1. Ajout à l'historique + rafraîchissement localisé du ScrollView
         self.historique_dialogue.append({"role": "user", "texte": txt})
         self.rafraichir_bulles_dialogue()
 
-        # 2. Indicateur de chargement inséré dans le ScrollView
         self.layout_chargement = BoxLayout(
             orientation='horizontal',
             size_hint_y=None,
@@ -4222,7 +3985,7 @@ class FixedDynamicQuizApp(App):
             spacing=dp(8),
             padding=[dp(10), dp(2)]
         )
-        
+
         img_synchro = Image(
             source='icone_appli/synchronisation.png',
             size_hint=(None, None),
@@ -4246,24 +4009,26 @@ class FixedDynamicQuizApp(App):
         self.input_relance.text = ""
         self.scroll_chat.scroll_y = 0
 
-        # 3. Requête réseau
         contexte_global = f"Catégorie: {categorie}\nSujet initial: {requete_initiale}\n\n--- Historique ---\n"
         for item in self.historique_dialogue:
             role_nom = "Utilisateur" if item["role"] == "user" else "Assistant IA"
             contexte_global += f"{role_nom}: {item['texte']}\n"
-        
+
         contexte_global += "\nConsigne: Réponds à la dernière intervention en tenant compte du contexte."
 
-        url = "https://fazadnassur.pythonanywhere.com/api/requete_libre"
+        url = self.url_api("/api/requete_libre")
         donnees = json.dumps({
-            "niveau": getattr(self, 'niveau_utilisateur', ''),
-            "classe": getattr(self, 'classe_utilisateur', ''),
+            "utilisateur": getattr(self, 'nom_utilisateur', ''),
+            "identifiant": getattr(self, 'identifiant_joueur', ''),
+            "classe": getattr(self, 'classe_utilisateur', getattr(self, 'classe_choisie', '')),
+            "niveau_utilisateur": getattr(self, 'niveau_utilisateur', ''),
+            "grade_actuel": self.obtenir_rang_actuel() if hasattr(self, 'obtenir_rang_actuel') else "Bronze I",
             "chapitre": contexte_global,
             "mode": categorie
         })
-        
+
         headers = {'Content-Type': 'application/json'}
-        
+
         UrlRequest(
             url,
             req_body=donnees,
@@ -4275,7 +4040,6 @@ class FixedDynamicQuizApp(App):
         )
 
     def ajouter_reponse_au_chat(self, resultat):
-        # Retirer l'indicateur "Génération en cours..."
         if hasattr(self, 'layout_chargement') and self.layout_chargement in self.box_messages.children:
             self.box_messages.remove_widget(self.layout_chargement)
 
@@ -4292,17 +4056,15 @@ class FixedDynamicQuizApp(App):
         else:
             reponse = str(resultat)
 
-        # Enregistrer la réponse dans l'historique et mettre à jour le rendu
         self.historique_dialogue.append({"role": "ia", "texte": reponse})
         self.rafraichir_bulles_dialogue()
-        
-        # Défiler automatiquement jusqu'en bas
+
         self.scroll_chat.scroll_y = 0
 
     def afficher_erreur_chat(self, erreur):
         if hasattr(self, 'layout_chargement') and self.layout_chargement in self.box_messages.children:
             self.box_messages.remove_widget(self.layout_chargement)
-            
+
         msg = "Erreur de connexion au serveur"
         if isinstance(erreur, dict):
             msg = erreur.get("reponse", msg)
@@ -4318,27 +4080,24 @@ class FixedDynamicQuizApp(App):
         )
         self.box_messages.add_widget(lbl_err)
 
-# ===== ASSISTANT IA : CHOIX DU MODE======
     def etape_selection_mode(self, classe_choisie):
         self.nettoyer_boutons_bas()
-    
-    # On sauvegarde la classe choisie dans l'instance
+
         self.classe_choisie = classe_choisie
-        self.classe_actuelle = classe_choisie  # Si tu utilises aussi classe_actuelle
-    
+        self.classe_actuelle = classe_choisie
+
         self.interaction_layout.clear_widgets()
 
         self.info_label.text = "Assistant IA - Choix du Mode"
-    
-    # On peut maintenant utiliser self.classe_choisie directement !
+
         self.question_label.text = f"Choisis le mode de travail pour la classe {self.classe_choisie} :"
-        
+
         btn_ent = Button(
             text="Mode Entraînement",
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
-            halign='center', 
+            halign='center',
             valign='middle',
             background_color=(0, 0, 0, 0),
             size_hint_y=None,
@@ -4349,7 +4108,7 @@ class FixedDynamicQuizApp(App):
         with btn_ent.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_ent.ombre = RoundedRectangle(pos=(btn_ent.x + dp(17), btn_ent.y - dp(17)), size=btn_ent.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_ent.fond = RoundedRectangle(pos=btn_ent.pos, size=btn_ent.size, radius=[dp(27)])
             btn_ent.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_ent.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
@@ -4359,7 +4118,7 @@ class FixedDynamicQuizApp(App):
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
-            halign='center', 
+            halign='center',
             valign='middle',
             background_color=(0, 0, 0, 0),
             size_hint_y=None,
@@ -4370,7 +4129,7 @@ class FixedDynamicQuizApp(App):
         with btn_exam.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_exam.ombre = RoundedRectangle(pos=(btn_exam.x + dp(17), btn_exam.y - dp(17)), size=btn_exam.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_exam.fond = RoundedRectangle(pos=btn_exam.pos, size=btn_exam.size, radius=[dp(27)])
             btn_exam.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_exam.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
@@ -4380,7 +4139,7 @@ class FixedDynamicQuizApp(App):
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
-            halign='center', 
+            halign='center',
             valign='middle',
             background_color=(0, 0, 0, 0),
             size_hint_y=None,
@@ -4396,7 +4155,6 @@ class FixedDynamicQuizApp(App):
             btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-# ======= SOUS-MENU EXAMEN ===========
     def etape_sous_menu_examen(self):
         self.interaction_layout.clear_widgets()
         self.info_label.text = "Mode Examen - Type d'épreuve"
@@ -4407,7 +4165,7 @@ class FixedDynamicQuizApp(App):
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
-            halign='center', 
+            halign='center',
             valign='middle',
             background_color=(0, 0, 0, 0),
             size_hint_y=None,
@@ -4418,7 +4176,7 @@ class FixedDynamicQuizApp(App):
         with btn_simple.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_simple.ombre = RoundedRectangle(pos=(btn_simple.x + dp(17), btn_simple.y - dp(17)), size=btn_simple.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_simple.fond = RoundedRectangle(pos=btn_simple.pos, size=btn_simple.size, radius=[dp(27)])
             btn_simple.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_simple.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
@@ -4428,7 +4186,7 @@ class FixedDynamicQuizApp(App):
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
-            halign='center', 
+            halign='center',
             valign='middle',
             background_color=(0, 0, 0, 0),
             size_hint_y=None,
@@ -4439,7 +4197,7 @@ class FixedDynamicQuizApp(App):
         with btn_sujet.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_sujet.ombre = RoundedRectangle(pos=(btn_sujet.x + dp(17), btn_sujet.y - dp(17)), size=btn_sujet.size, radius=[dp(27)])
-            Color(0.114, 0.459, 0.737, 1)
+            Color(0.14, 0.09, 0.32, 1)
             btn_sujet.fond = RoundedRectangle(pos=btn_sujet.pos, size=btn_sujet.size, radius=[dp(27)])
             btn_sujet.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_sujet.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
@@ -4450,7 +4208,7 @@ class FixedDynamicQuizApp(App):
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
             halign='center',
-             valign='middle',
+            valign='middle',
             background_color=(0, 0, 0, 0),
             size_hint_y=None,
             height=dp(50)
@@ -4487,7 +4245,7 @@ class FixedDynamicQuizApp(App):
             with btn_nb.canvas.before:
                 Color(0, 0, 0, 0.3)
                 btn_nb.ombre = RoundedRectangle(pos=(btn_nb.x + dp(17), btn_nb.y - dp(17)), size=btn_nb.size, radius=[dp(27)])
-                Color(0.114, 0.459, 0.737, 1)
+                Color(0.14, 0.09, 0.32, 1)
                 btn_nb.fond = RoundedRectangle(pos=btn_nb.pos, size=btn_nb.size, radius=[dp(27)])
                 btn_nb.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
                 btn_nb.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
@@ -4497,11 +4255,11 @@ class FixedDynamicQuizApp(App):
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
-            halign='center', 
+            halign='center',
             valign='middle',
             background_color=(0, 0, 0, 0),
             size_hint_y=None,
-            height=dp(50))             
+            height=dp(50))
         btn_retour.bind(on_press=lambda x: self.etape_sous_menu_examen())
         self.interaction_layout.add_widget(btn_retour)
         with btn_retour.canvas.before:
@@ -4512,7 +4270,6 @@ class FixedDynamicQuizApp(App):
             btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
- # ====== LANCEMENT DES MODES ========
     def lancer_mode_entrainement(self):
         self.score_session = 0
         self.total_questions_session = 0
@@ -4522,7 +4279,7 @@ class FixedDynamicQuizApp(App):
         self.max_questions_examen = nb_questions
         self.index_examen_actuel = 0
         self.score_examen = 0
-        self.historique_examen = [] # Pour stocker le récapitulatif détaillé
+        self.historique_examen = []
         self.requeter_ia_generer("Examen Simple")
 
     def lancer_generation_sujet_entier(self):
@@ -4534,21 +4291,20 @@ class FixedDynamicQuizApp(App):
     def requeter_ia_generer(self, mode_str):
         self.interaction_layout.clear_widgets()
         self.info_label.text = f"Génération IA - {mode_str}"
-        
+
         if mode_str == "Examen Simple":
             self.index_examen_actuel += 1
             self.question_label.text = f"Question {self.index_examen_actuel}/{self.max_questions_examen} en cours de génération..."
         else:
             self.question_label.text = f"Génération par l'IA d'une question d'entraînement..."
-        
+
         self.appeler_api_flask(mode=mode_str)
 
     def appeler_api_flask(self, mode):
-        url = "https://fazadnassur.pythonanywhere.com/api/generer_question"
-        
-        # Récupération sécurisée du niveau, de la classe et du chapitre
-        niveau = getattr(self, 'niveau_choisi', getattr(self, 'niveau_actuelle', ''))
-        classe = getattr(self, 'classe_choisie', getattr(self, 'classe_actuelle', ''))
+        url = self.url_api("/api/generer_question")
+
+        classe = getattr(self, 'classe_choisie', '') or getattr(self, 'classe_actuelle', '')
+        niveau = getattr(self, 'niveau_choisie', '') or classe
         chapitre = getattr(self, 'chapitre_en_cours', '')
 
         donnees_requete = {
@@ -4558,7 +4314,7 @@ class FixedDynamicQuizApp(App):
             "mode": mode
         }
         headers = {'Content-Type': 'application/json'}
-        
+
         UrlRequest(
             url,
             req_body=json.dumps(donnees_requete),
@@ -4568,13 +4324,13 @@ class FixedDynamicQuizApp(App):
             on_error=lambda req, err: setattr(self.question_label, 'text', f'Erreur réseau : {err}'),
             on_failure=lambda req, res: setattr(self.question_label, 'text', f'Échec serveur : {res}')
         )
-        
+
         btn_retour = Button(
             text="⬅ Retour",
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
-            halign='center', 
+            halign='center',
             valign='middle',
             background_color=(0.75, 0.2, 0.2, 1),
             size_hint_y=None,
@@ -4582,32 +4338,29 @@ class FixedDynamicQuizApp(App):
         )
         btn_retour.bind(on_press=lambda x: self.afficher_menu_ia_parametres(None))
         self.interaction_layout.add_widget(btn_retour)
-        
-# === AFFICHAGE DES QUESTIONS REÇUES ====
+
     def recevoir_et_afficher_ia(self, req, resultat):
         if isinstance(resultat, str):
-            import json
             try:
                 resultat = json.loads(resultat)
             except Exception:
                 resultat = {"enonce": resultat}
-            
+
         self.enonce_actuel = resultat.get("enonce", "Erreur : aucune donnée reçue")
         self.bonne_reponse_ia = resultat.get("bonne_reponse", "")
         self.options_ia = resultat.get("options", [])
         self.explication_ia = resultat.get("explication", "Aucune explication fournie.")
-        
-        # Si c'est un sujet complet affiché d'un bloc
+
         if "Sujet Complet" in getattr(self.info_label, 'text', ''):
             self.question_label.text = self.enonce_actuel
             self.interaction_layout.clear_widgets()
-            
+
             btn_retour = Button(
                 text=" Retour Assistant IA",
                 font_size='18sp',
                 bold=True,
                 text_size=(1 * Window.width - dp(20), None),
-                halign='center', 
+                halign='center',
                 valign='middle',
                 background_color=(0, 0, 0, 0),
                 size_hint_y=None,
@@ -4624,17 +4377,16 @@ class FixedDynamicQuizApp(App):
                 btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
             return
 
-        # Mode Question par Question (Entraînement ou Examen Simple)
-        self.question_label.text = f"Question :\n{self.enonce_actuel}"
+        self.question_label.text = f"Question :\n{latex_vers_texte(self.enonce_actuel)}"
         self.interaction_layout.clear_widgets()
-        
+
         for opt in self.options_ia:
             btn_opt = Button(
-                text=opt,
+                text=latex_vers_texte(opt),
                 font_size='18sp',
                 bold=True,
                 text_size=(1 * Window.width - dp(20), None),
-                halign='center', 
+                halign='center',
                 valign='middle',
                 background_color=(0, 0, 0, 0),
                 size_hint_y=None,
@@ -4644,40 +4396,34 @@ class FixedDynamicQuizApp(App):
             self.interaction_layout.add_widget(btn_opt)
             with btn_opt.canvas.before:
                 Color(0, 0, 0, 0.3)
-                # Correction : btn_opt au lieu de btn_nb
                 btn_opt.ombre = RoundedRectangle(pos=(btn_opt.x + dp(3), btn_opt.y - dp(3)), size=btn_opt.size, radius=[dp(27)])
-                Color(0.114, 0.459, 0.737, 1)
-                # Correction : btn_opt.pos au lieu de btn_nb.pos
+                Color(0.14, 0.09, 0.32, 1)
                 btn_opt.fond = RoundedRectangle(pos=btn_opt.pos, size=btn_opt.size, radius=[dp(27)])
                 btn_opt.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
                 btn_opt.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
- # ==== VÉRIFICATION & GESTION DES NOTES ==
     def verifier_reponse_interactive(self, choix_utilisateur):
         try:
-            # Récupération sécurisée des données de la question
             bonne_reponse = getattr(self, 'bonne_reponse_ia', '').strip()
-            enonce = getattr(self, 'enonce_actuel', '')
-            explication = getattr(self, 'explication_ia', 'Aucune explication disponible.')
+            enonce = latex_vers_texte(getattr(self, 'enonce_actuel', ''))
+            explication = latex_vers_texte(getattr(self, 'explication_ia', 'Aucune explication disponible.'))
             nom = getattr(self, 'nom_utilisateur', 'Élève')
 
             est_correct = (str(choix_utilisateur).strip() == bonne_reponse)
 
-            # Détection du mode grâce à l'index d'examen
             max_exam = getattr(self, 'max_questions_examen', 0)
             index_exam = getattr(self, 'index_examen_actuel', 0)
-            
+
             is_mode_examen = (max_exam > 0 and index_exam <= max_exam)
 
             if not is_mode_examen:
-                # Mode Entraînement
                 self.total_questions_session = getattr(self, 'total_questions_session', 0) + 1
                 if est_correct:
                     self.score_session = getattr(self, 'score_session', 0) + 1
-                
+
                 note_sur_20 = (self.score_session / self.total_questions_session) * 20
                 self.interaction_layout.clear_widgets()
-                
+
                 if est_correct:
                     self.question_label.text = (
                         f"EXCELLENT TRAVAIL, {nom} ! \n\n"
@@ -4689,7 +4435,7 @@ class FixedDynamicQuizApp(App):
                     self.question_label.text = (
                         f"Dommage {nom}, c'est une erreur \n\n"
                         f"Question posée : {enonce}\n"
-                        f"Bonne réponse : {bonne_reponse}\n\n"
+                        f"Bonne réponse : {latex_vers_texte(bonne_reponse)}\n\n"
                         f"Explication :\n{explication}\n\n"
                         f"Note actuelle : {note_sur_20:.2f} / 20"
                     )
@@ -4707,7 +4453,7 @@ class FixedDynamicQuizApp(App):
                 )
                 btn_suite.bind(on_press=lambda x: self.requeter_ia_generer("Entraînement"))
                 self.interaction_layout.add_widget(btn_suite)
-                
+
                 with btn_suite.canvas.before:
                     Color(0, 0, 0, 0.3)
                     btn_suite.ombre = RoundedRectangle(pos=(btn_suite.x + dp(3), btn_suite.y - dp(3)), size=btn_suite.size, radius=[dp(27)])
@@ -4717,11 +4463,10 @@ class FixedDynamicQuizApp(App):
                     btn_suite.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
             else:
-                # Mode Examen Simple
                 self.score_examen = getattr(self, 'score_examen', 0)
                 if est_correct:
                     self.score_examen += 1
-                
+
                 if not hasattr(self, 'historique_examen'):
                     self.historique_examen = []
 
@@ -4733,23 +4478,24 @@ class FixedDynamicQuizApp(App):
                     "explication": explication
                 })
 
-                # Vérifier si l'examen continue
                 if self.index_examen_actuel < self.max_questions_examen:
                     self.requeter_ia_generer("Examen Simple")
                     return
                 else:
-                    # Bilan de l'examen terminé
                     note_examen_20 = (self.score_examen / self.max_questions_examen) * 20
                     mention = "Échec"
-                    if note_examen_20 >= 16: mention = "Très Bien "
-                    elif note_examen_20 >= 14: mention = "Bien "
-                    elif note_examen_20 >= 12: mention = "Assez Bien "
-                    elif note_examen_20 >= 10: mention = "Passable "
+                    if note_examen_20 >= 16:
+                        mention = "Très Bien "
+                    elif note_examen_20 >= 14:
+                        mention = "Bien "
+                    elif note_examen_20 >= 12:
+                        mention = "Assez Bien "
+                    elif note_examen_20 >= 10:
+                        mention = "Passable "
 
                     self.question_label.text = f"RÉCAPITULATIF DE L'EXAMEN\nNote Finale : {note_examen_20:.2f} / 20\nMention : {mention}\n"
                     self.interaction_layout.clear_widgets()
 
-                    # Conteneur principal avec hauteur dynamique pour ScrollView
                     container_recap = BoxLayout(
                         orientation='vertical',
                         size_hint_y=None,
@@ -4757,7 +4503,6 @@ class FixedDynamicQuizApp(App):
                     )
                     container_recap.bind(minimum_height=container_recap.setter('height'))
 
-                    # Affichage de chaque résultat avec les chemins PNG corrects
                     for i, res in enumerate(self.historique_examen, 1):
                         box_item = BoxLayout(
                             orientation='horizontal',
@@ -4766,9 +4511,8 @@ class FixedDynamicQuizApp(App):
                             padding=[dp(5), dp(5)]
                         )
 
-                        # Bon dossier et bons noms de fichiers PNG
-                        chemin_img = "Icone_appli/succes.png" if res["correct"] else "Icone_appli/erreur.png"
-                        
+                        chemin_img = "icone_appli/succes.png" if res["correct"] else "icone_appli/erreur.png"
+
                         img_statut = Image(
                             source=chemin_img,
                             size_hint=(None, None),
@@ -4777,9 +4521,9 @@ class FixedDynamicQuizApp(App):
                         )
                         box_item.add_widget(img_statut)
 
-                        texte_q = f"Q{i}: {res['question']}\nVotre réponse: {res['choix']}"
+                        texte_q = f"Q{i}: {res['question']}\nVotre réponse: {latex_vers_texte(res['choix'])}"
                         if not res["correct"]:
-                            texte_q += f"\nAttendu: {res['bonne_reponse']}\nExpl: {res['explication']}"
+                            texte_q += f"\nAttendu: {latex_vers_texte(res['bonne_reponse'])}\nExpl: {res['explication']}"
 
                         lbl_details = Label(
                             text=texte_q,
@@ -4792,23 +4536,20 @@ class FixedDynamicQuizApp(App):
                         lbl_details.bind(texture_size=lambda inst, val: setattr(inst, 'height', val[1]))
                         box_item.add_widget(lbl_details)
 
-                        # Ajustement automatique de la hauteur du bloc item
                         lbl_details.bind(height=lambda inst, val: setattr(box_item, 'height', max(val, dp(30))))
                         container_recap.add_widget(box_item)
 
                     self.interaction_layout.add_widget(container_recap)
 
-                    # Réinitialisation des index
                     self.max_questions_examen = 0
                     self.index_examen_actuel = 0
 
-            # Bouton de retour placé sous les éléments
             btn_retour = Button(
                 text="Retour Assistant IA",
                 font_size='18sp',
                 bold=True,
                 text_size=(1 * Window.width - dp(20), None),
-                halign='center', 
+                halign='center',
                 valign='middle',
                 background_color=(0, 0, 0, 0),
                 size_hint_y=None,
@@ -4816,7 +4557,7 @@ class FixedDynamicQuizApp(App):
             )
             btn_retour.bind(on_press=lambda x: self.afficher_menu_ia_parametres(None))
             self.interaction_layout.add_widget(btn_retour)
-            
+
             with btn_retour.canvas.before:
                 Color(0, 0, 0, 0.3)
                 btn_retour.ombre = RoundedRectangle(pos=(btn_retour.x + dp(3), btn_retour.y - dp(3)), size=btn_retour.size, radius=[dp(27)])
@@ -4827,8 +4568,7 @@ class FixedDynamicQuizApp(App):
 
         except Exception as e:
             self.question_label.text = f"Erreur de traitement :\n{str(e)}"
-        
-            # --- MOTEUR DE GÉNÉRATION DES ÉNONCÉS MULTI-VARIANTES ---
+
     def moteur_generateur_mathematique(self, classe_cible, chapitre_cible):
         _, _, _, index_grade = self.determiner_rang_et_details()
         return MoteurMathematique.moteur_generateur_mathematique(
@@ -4836,6 +4576,7 @@ class FixedDynamicQuizApp(App):
             chapitre_cible,
             index_grade,
             self.niveau_profil
-        )   
+        )
+
 if __name__ == '__main__':
     FixedDynamicQuizApp().run()
