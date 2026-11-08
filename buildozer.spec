@@ -6,7 +6,7 @@ source.dir =.
 source.include_exts = py,png,jpg,kv,atlas,ogg,mp3,wav,json,html,js,css,woff,woff2,ttf
 source.include_patterns = katex/*,katex/contrib/*,katex/fonts/*,sons/*,musiques/*,badges/*,icone_appli/*
 
-version = 1.6.0
+version = 1.6.1
 requirements = python3,kivy,plyer@https://github.com/kivy/plyer/archive/master.zip,pillow,android,pyjnius,requests,urllib3,certifi,idna,chardet
 
 
