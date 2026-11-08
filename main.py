@@ -478,7 +478,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.scroll_interaction.opacity = 0
 
         base = os.path.dirname(os.path.abspath(__file__))
-        chemin_video = os.path.join(base, 'badges', 'Intro.mp4')
+        chemin_video = os.path.join(base,'Intro.mp4')
         chemin_logo = os.path.join(base, 'badges', 'logo.png')
         chemin_son = os.path.join(base, 'musiques', 'ouverture', 'Intro.ogg')
         self._intro_fini = False
