@@ -8,7 +8,8 @@ import webbrowser
 import traceback
 #os.environ['KIVY_AUDIO'] = 'sdl2'  # doit précéder tout import kivy
 from kivy.utils import platform
-from android_math_webview import AndroidMathWebView
+from android_math_webview import AndroidMathWebView, LETTRES
+from comptes_ui import FonctionsComptes
 from latex_utils import latex_vers_texte
 from html import escape
 from kivy.uix.widget import Widget
@@ -27,7 +28,7 @@ from kivy.metrics import dp
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
-from en_ligne import Button, SoundManager, FonctionsEnLigne, bouton as bouton_neon
+from en_ligne import Button, SoundManager, FonctionsEnLigne, bouton as bouton_neon, etiquette, champ
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.progressbar import ProgressBar
 from kivy.uix.textinput import TextInput
@@ -35,6 +36,34 @@ from kivy.clock import Clock
 from kivy.graphics import Color, RoundedRectangle, Rectangle, Ellipse
 from kivy.network.urlrequest import UrlRequest
 from kivy.core.text import LabelBase
+
+# Fiches de cours en LaTeX (rendu KaTeX) : (titre, texte avec $maths$)
+FICHES_LATEX = {
+    "6ème": [("Priorités", "Multiplications et divisions d'abord, puis additions et soustractions."),
+             ("Cercle", "Périmètre : $P = 2 \\times \\pi \\times R$"),
+             ("Angles", "Aigu : $< 90^\\circ$ · Droit : $= 90^\\circ$ · Obtus : $> 90^\\circ$"),
+             ("Symétrie axiale", "Pliage le long d'une droite.")],
+    "5ème": [("Puissances", "$a^n \\times a^m = a^{n+m}$"),
+             ("Triangle", "La somme des angles vaut toujours $180^\\circ$."),
+             ("Symétrie centrale", "Demi-tour autour d'un centre : $O$ est le milieu de $[AA']$.")],
+    "4ème": [("Rationnels", "Nombre s'écrivant $\\dfrac{a}{b}$ avec $b \\neq 0$."),
+             ("Cosinus", "$\\cos \\alpha = \\dfrac{\\text{côté adjacent}}{\\text{hypoténuse}}$"),
+             ("Relation de Chasles", "$\\overrightarrow{AB} + \\overrightarrow{BC} = \\overrightarrow{AC}$")],
+    "3ème": [("Identités remarquables", "$(a+b)^2 = a^2 + 2ab + b^2$\n$(a-b)^2 = a^2 - 2ab + b^2$\n$(a-b)(a+b) = a^2 - b^2$"),
+             ("Thalès", "$\\dfrac{OA}{OC} = \\dfrac{OB}{OD} = \\dfrac{AB}{CD}$"),
+             ("Droite", "$y = ax + b$ où $a$ est le coefficient directeur.")],
+    "2nde": [("Valeur absolue", "$|x|$ est la distance à zéro : $|x| \\geq 0$."),
+             ("Vecteurs colinéaires", "$\\vec u(x\\,;y)$ et $\\vec v(x'\\,;y')$ sont colinéaires si $xy' - yx' = 0$.")],
+    "1ére": [("Dérivées usuelles", "$(x^2)' = 2x$ · $(x^n)' = n\\,x^{n-1}$"),
+             ("Second degré", "$\\Delta = b^2 - 4ac$\n$\\Delta > 0$ : 2 racines · $\\Delta = 0$ : 1 racine double · $\\Delta < 0$ : aucune racine réelle.")],
+    "Terminale": [("Nombres complexes", "$z = a + ib$ avec $i^2 = -1$."),
+                  ("Intégrale", "$\\displaystyle\\int_a^b f(x)\\,dx = F(b) - F(a)$ où $F$ est une primitive de $f$.")],
+    "1ére année": [("Accélération de Coriolis", "$\\vec{a}_c = 2\\,\\vec{\\Omega} \\wedge \\vec{v}_r$"),
+                   ("Base de Frenet", "$a_n = \\dfrac{v^2}{R}$"),
+                   ("Théorème du rang", "$\\dim(\\mathrm{Ker}\\, f) + \\dim(\\mathrm{Im}\\, f) = \\dim(E)$"),
+                   ("Développements limités en 0", "$\\cos x = 1 - \\dfrac{x^2}{2} + o(x^2)$\n$\\sin x = x - \\dfrac{x^3}{6} + o(x^3)$\n$e^x = 1 + x + o(x)$")],
+}
+
 
 # ___CLASS DU MASCOTTE ___
 class DraggableMascot(FloatLayout):
@@ -179,7 +208,7 @@ class DraggableMascot(FloatLayout):
         anim.start(self)
 
 # ___CLASS PRINCIPAL ___
-class FixedDynamicQuizApp(FonctionsEnLigne, App):
+class FixedDynamicQuizApp(FonctionsComptes, FonctionsEnLigne, App):
     def build(self):
 
         if Window:
@@ -214,6 +243,12 @@ class FixedDynamicQuizApp(FonctionsEnLigne, App):
         self.niveau_choisie = ""
         self.index_grade = 1
         self.nom_developpeur = "Fazad Nassur"
+        self.jeton_compte = ""              # jeton de session renvoyé par le serveur (jamais le mot de passe)
+        self.ile_utilisateur = ""
+        self.email_utilisateur = ""
+        self.compte_hors_ligne = False
+        self._mode_question = False         # True : la page de quiz occupe tout l'espace libre
+        self.init_comptes()
         self.temps_debut_question = 0.0
         self.question_courante = None
         self.index_correct = 0
@@ -265,8 +300,7 @@ class FixedDynamicQuizApp(FonctionsEnLigne, App):
         # --- STATISTIQUES AVANCÉES ---
         self.stats_chapitres = {}
         self.historique_scores = []
-        self.nom_fichier_sauvegarde = "mathquiz.json"
-        #self.nom_fichier_sauvegarde = os.path.join(self.user_data_dir, "mathquiz.json")
+        self.nom_fichier_sauvegarde = os.path.join(self.user_data_dir, "mathquiz.json")
 
         # --- PROGRAMME OFFICIEL COMPLET ---
         # programme unique partagé avec le moteur et le serveur (Analyse 1 et Analyse 2 inclus)
@@ -372,7 +406,7 @@ class FixedDynamicQuizApp(FonctionsEnLigne, App):
         self.btn_menu_persistant = Button(text="Revenir au Menu Principal", font_size='20sp', bold=True, size_hint_y=None, height=dp(50), background_color=(0.75, 0.2, 0.2, 1))
         self.btn_menu_persistant.bind(on_press=self.action_retour_menu_persistant)
 
-        self.btn_retour_isole = Button(text="← Retour Évolution", size_hint=(1, None), height=dp(50), font_size='22sp', bold=True, background_color=(0, 0, 0, 0))
+        self.btn_retour_isole = Button(text="« Retour Évolution", size_hint=(1, None), height=dp(50), font_size='22sp', bold=True, background_color=(0, 0, 0, 0))
         self.charger_donnees_locales()
 
         self.root_layout.add_widget(self.main_layout)
@@ -443,23 +477,77 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.scroll_texte.opacity = 0
         self.scroll_interaction.opacity = 0
 
-        chemin_logo = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'badges', 'logo.png')
-        print(f"CHEMIN LOGO: {chemin_logo}")
+        base = os.path.dirname(os.path.abspath(__file__))
+        chemin_video = os.path.join(base, 'badges', 'Intro.mp4')
+        chemin_logo = os.path.join(base, 'badges', 'logo.png')
+        chemin_son = os.path.join(base, 'musiques', 'ouverture', 'Intro.ogg')
+        self._intro_fini = False
+        self._ev_fin_intro = None
+        self._video_intro = None
+        self._son_intro = None
 
         ecran_intro = FloatLayout()
-
         if not hasattr(self, 'mascotte') or self.mascotte is None:
             self.mascotte = DraggableMascot(size=(dp(160), dp(90)), pos=(dp(20), dp(150)))
-
         if self.mascotte.parent:
             self.mascotte.parent.remove_widget(self.mascotte)
 
         with ecran_intro.canvas.before:
-            Color(0.12, 0.28, 0.48, 0)
+            Color(0, 0, 0, 1)
             self.rect_splash = Rectangle(size=ecran_intro.size, pos=ecran_intro.pos)
         ecran_intro.bind(size=lambda inst, val: setattr(self.rect_splash, 'size', val))
         ecran_intro.bind(pos=lambda inst, val: setattr(self.rect_splash, 'pos', val))
+        self.main_layout.add_widget(ecran_intro)
 
+        if not self._lancer_video_intro(ecran_intro, chemin_video):
+            self._intro_secours(ecran_intro, chemin_logo, chemin_son)
+
+    def _lancer_video_intro(self, ecran, chemin):
+        """Joue badges/intro.mp4 (avec son). Retourne False si la vidéo est absente ou illisible."""
+        if not os.path.exists(chemin):
+            print(f"Vidéo d'intro absente : {chemin}")
+            return False
+        try:
+            from kivy.uix.video import Video
+            video = Video(source=chemin, state='play', options={'eos': 'stop'}, volume=1.0,
+                          allow_stretch=True, keep_ratio=True, size_hint=(1, 1))
+        except Exception as e:
+            print(f"Vidéo d'intro impossible à créer : {e}")
+            return False
+        self._video_intro = video
+        ecran.add_widget(video)
+        video.bind(eos=lambda inst, val: self._fin_intro(ecran) if val else None)
+        # toucher l'écran passe l'intro
+        ecran.bind(on_touch_down=lambda inst, touch: (self._fin_intro(ecran), True)[1])
+
+        def verifier(dt):
+            """Si aucune image n'est décodée après 5 s (codec absent…), on bascule sur Intro.ogg + logo."""
+            if self._intro_fini or self._video_intro is None:
+                return
+            if video.texture is None or video.state != 'play':
+                print("Vidéo d'intro non lisible : secours Intro.ogg")
+                self._abandonner_video(ecran)
+            elif video.duration and video.duration > 0:
+                self._ev_fin_intro = Clock.schedule_once(lambda d: self._fin_intro(ecran), video.duration + 1.5)
+        Clock.schedule_once(verifier, 5.0)
+        return True
+
+    def _abandonner_video(self, ecran):
+        video, self._video_intro = self._video_intro, None
+        try:
+            if video is not None:
+                video.state = 'stop'
+                video.unload()
+                if video.parent:
+                    video.parent.remove_widget(video)
+        except Exception as e:
+            print(f"Arrêt vidéo : {e}")
+        base = os.path.dirname(os.path.abspath(__file__))
+        self._intro_secours(ecran, os.path.join(base, 'badges', 'logo.png'),
+                            os.path.join(base, 'musiques', 'ouverture', 'Intro.ogg'))
+
+    def _intro_secours(self, ecran_intro, chemin_logo, chemin_son):
+        """Ancienne intro (logo + Locky) accompagnée du son Intro.ogg."""
         if os.path.exists(chemin_logo):
             logo_splash = Image(
                 source=chemin_logo,
@@ -471,15 +559,49 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
                 opacity=0
             )
             ecran_intro.add_widget(logo_splash)
-
             anim = Animation(opacity=1, duration=0.5) + Animation(opacity=1, duration=2) + Animation(opacity=1, duration=0.5)
             anim.start(logo_splash)
 
+        duree = 11
+        try:
+            if os.path.exists(chemin_son):
+                self._son_intro = SoundLoader.load(chemin_son)
+                if self._son_intro:
+                    self._son_intro.volume = 1.0
+                    self._son_intro.play()
+                    if self._son_intro.length and self._son_intro.length > 1:
+                        duree = min(20, max(6, self._son_intro.length + 0.5))
+            else:
+                print(f"Son d'intro absent : {chemin_son}")
+        except Exception as e:
+            print(f"Son d'intro : {e}")
+
+        if self.mascotte.parent:
+            self.mascotte.parent.remove_widget(self.mascotte)
         ecran_intro.add_widget(self.mascotte)
         self.sequence_intro_locky(self.mascotte)
+        if self._ev_fin_intro is not None:
+            self._ev_fin_intro.cancel()
+        self._ev_fin_intro = Clock.schedule_once(lambda dt: self._fin_intro(ecran_intro), duree)
 
-        self.main_layout.add_widget(ecran_intro)
-        Clock.schedule_once(lambda dt: self.aller_au_menu_principal(ecran_intro), 11)
+    def _fin_intro(self, ecran_intro):
+        if self._intro_fini:
+            return
+        self._intro_fini = True
+        if self._ev_fin_intro is not None:
+            self._ev_fin_intro.cancel()
+            self._ev_fin_intro = None
+        try:
+            if self._video_intro is not None:
+                self._video_intro.state = 'stop'
+                self._video_intro.unload()
+            if self._son_intro:
+                self._son_intro.stop()
+                self._son_intro.unload()
+        except Exception as e:
+            print(f"Fin intro : {e}")
+        self._video_intro = self._son_intro = None
+        self.aller_au_menu_principal(ecran_intro)
 
     def sequence_intro_locky(self, mascot):
         points = [
@@ -574,8 +696,8 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             self.info_layout.add_widget(self.btn_parametres)
 
         self.charger_donnees_locales()
-        if not self.nom_utilisateur:
-            self.demander_nom_utilisateur()
+        if self.compte_requis():
+            self.demander_nom_utilisateur()     # créer / récupérer un compte (ou continuer hors-ligne)
         else:
             self.afficher_menu_principal_modes()
 
@@ -620,6 +742,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             ("Consulter mes données enregistrées", self.afficher_donnees_utilisateur, "rouge"),
             ("Réglages Audio", self.ouvrir_menu_reglage, "rouge"),
             ("Copier mon identifiant", lambda x: self.copier_identifiant(), "rouge"),
+            ("Mon compte (connexion / déconnexion)", lambda x: (self.fermer_menu_parametres(x), self.afficher_mon_compte()), "rouge"),
             ("Sons d'interaction : activer / couper", lambda x: self.basculer_sons(), "rouge"),
             ("Serveur (Internet ou Wi-Fi de la classe)", lambda x: (self.fermer_menu_parametres(x), self.afficher_reglage_serveur()), "rouge"),
             ("Supprimer mes données en ligne", lambda x: (self.fermer_menu_parametres(x), self.supprimer_mes_donnees_en_ligne()), "rouge"),
@@ -749,7 +872,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.layout_parametres.add_widget(box_contenu)
 
         btn_retour_param = Button(
-            text="← Retour",
+            text="« Retour",
             font_size='18sp',
             text_size=(0.8 * Window.width - dp(20), None),
             halign='center',
@@ -929,7 +1052,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.layout_parametres.add_widget(btn_copie_id)
 
         btn_retour_param = Button(
-            text="← Retour",
+            text="« Retour",
             font_size='18sp',
             text_size=(0.8 * Window.width - dp(20), None),
             halign='center',
@@ -1018,7 +1141,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             btn_sauvegarder.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_sauvegarder.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        btn_retour_menu = Button(text="← Retour au menu principal", font_size='18sp', text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', bold=True, size_hint_y=None, height=dp(50), background_color=(0, 0, 0, 0))
+        btn_retour_menu = Button(text="« Retour au menu principal", font_size='18sp', text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', bold=True, size_hint_y=None, height=dp(50), background_color=(0, 0, 0, 0))
         btn_retour_menu.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         with btn_retour_menu.canvas.before:
             Color(0.2, 0.7, 0.4, 0.9)
@@ -1181,10 +1304,66 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.btn_retour_isole.bind(on_press=callback)
 
     def nettoyer_boutons_bas(self):
+        self._disposition_standard()
         if self.btn_menu_persistant in self.main_layout.children:
             self.main_layout.remove_widget(self.btn_menu_persistant)
         if self.btn_retour_isole in self.main_layout.children:
             self.main_layout.remove_widget(self.btn_retour_isole)
+
+    # ---- partage automatique de l'espace -----------------------------------------------------
+    def _disposition_question(self):
+        """Écran de quiz : l'en-tête garde sa place, la page (énoncé + propositions) prend TOUT l'espace restant
+        et la barre de boutons reste en bas. Aucun espace n'est gaspillé par une zone de texte vide."""
+        self._mode_question = True
+        if self.question_label.parent is not self.scroll_texte:
+            self.scroll_texte.clear_widgets()
+            if self.question_label.parent:
+                self.question_label.parent.remove_widget(self.question_label)
+            self.scroll_texte.add_widget(self.question_label)
+        self.scroll_texte.size_hint_y = None
+        self.scroll_texte.height = 0
+        self.scroll_texte.opacity = 0
+        self.scroll_interaction.size_hint_y = 1
+        self.scroll_interaction.do_scroll_y = False
+        self.interaction_layout.size_hint_y = None
+        self.scroll_interaction.unbind(height=self._maj_hauteur_interaction)
+        self.scroll_interaction.bind(height=self._maj_hauteur_interaction)
+        self.interaction_layout.height = max(dp(100), self.scroll_interaction.height)
+
+    def _maj_hauteur_interaction(self, instance, hauteur):
+        if self._mode_question:
+            self.interaction_layout.height = max(dp(100), hauteur)
+
+    def _disposition_standard(self):
+        """Quitte la disposition plein écran du quiz (appelé par tous les écrans de menu)."""
+        if not self._mode_question:
+            return
+        self._mode_question = False
+        self.scroll_interaction.unbind(height=self._maj_hauteur_interaction)
+        self.scroll_interaction.do_scroll_y = True
+        self.scroll_texte.opacity = 1
+        self.interaction_layout.height = dp(500)
+
+    def _construire_zone_quiz(self, q, titre, cb_choix, avec_explication=False):
+        """Page KaTeX (énoncé + propositions cliquables) + barre Quitter / Fiches Cours."""
+        L = self.interaction_layout
+        L.clear_widgets()
+        zone = BoxLayout(orientation='vertical', size_hint=(1, 1), spacing=dp(6))
+        web = AndroidMathWebView(size_hint=(1, 1))
+        web.set_question(q, titre_tete=titre, avec_explication=avec_explication, cliquable=True, on_choix=cb_choix)
+        zone.add_widget(web)
+        barre = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(10))
+        btn_quitter = Button(text="« Quitter", halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1),
+                             font_size='18sp', bold=True)
+        btn_quitter.bind(on_press=self.quitter_action)
+        btn_aide = Button(text="Fiches Cours", halign='center', valign='middle', background_color=(0.3, 0.2, 0.6, 1),
+                          font_size='18sp', bold=True)
+        btn_aide.bind(on_press=self.afficher_formulaire_cours)
+        barre.add_widget(btn_quitter)
+        barre.add_widget(btn_aide)
+        zone.add_widget(barre)
+        L.add_widget(zone)
+        self.web_quiz, self.barre_quiz = web, barre
 
     def action_retour_menu_persistant(self, instance):
         self.nettoyer_boutons_bas()
@@ -1247,7 +1426,11 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             "niveau_profil": self.niveau_profil,
             "points_de_rang": self.points_de_rang,
             "historique_scores": self.historique_scores,
-            "file_attente_avis": self.file_attente_avis
+            "file_attente_avis": self.file_attente_avis,
+            "jeton_compte": getattr(self, 'jeton_compte', ""),
+            "ile_utilisateur": getattr(self, 'ile_utilisateur', ""),
+            "email_utilisateur": getattr(self, 'email_utilisateur', ""),
+            "compte_hors_ligne": getattr(self, 'compte_hors_ligne', False)
         }
         try:
             with open(self.nom_fichier_sauvegarde, "w", encoding="utf-8") as f:
@@ -1285,6 +1468,10 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
                 if not self.identifiant_joueur:
                     self.identifiant_joueur = "id" + "".join([str(random.randint(0, 9)) for _ in range(6)])
                 self.file_attente_avis = data.get("file_attente_avis", [])
+                self.jeton_compte = data.get("jeton_compte", "")
+                self.ile_utilisateur = data.get("ile_utilisateur", "")
+                self.email_utilisateur = data.get("email_utilisateur", "")
+                self.compte_hors_ligne = data.get("compte_hors_ligne", False)
                 saved_stats = data.get("stats_chapitres", {})
                 for k, v in saved_stats.items():
                     if k in self.stats_chapitres:
@@ -1292,7 +1479,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             except Exception:
                 pass
 
-    def demander_nom_utilisateur(self):
+    def demander_nom_utilisateur_hors_ligne(self):
         self.nettoyer_boutons_bas()
         self.interaction_layout.clear_widgets()
         self.scroll_texte.size_hint_y = 0.32
@@ -1338,6 +1525,8 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
 
         self.interaction_layout.add_widget(self.input_nom)
         self.interaction_layout.add_widget(btn_valider_nom)
+        self.interaction_layout.add_widget(bouton_neon("« Retour", (0.8, 0.14, 0.24, 1), self.afficher_accueil_compte,
+                                                       h=48, neon=(0.8, 0.14, 0.24, 1)))
 
     def sauvegarder_nouveau_nom(self, instance):
         if not hasattr(self, "input_nom"):
@@ -1349,6 +1538,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             return
 
         self.nom_utilisateur = nom_saisi
+        self.compte_hors_ligne = True       # profil local sans compte : aucune fonction en ligne
 
         if not getattr(self, 'identifiant_joueur', ''):
             chiffres_uniques = "".join([str(random.randint(0, 9)) for _ in range(6)])
@@ -1358,83 +1548,18 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.afficher_popup_succes_identifiant(self.identifiant_joueur)
 
     def afficher_popup_succes_identifiant(self, identifiant_cree):
-        contenu = BoxLayout(orientation='vertical', padding=dp(25), spacing=dp(20))
-
-        with contenu.canvas.before:
-            Color(0.08, 0.12, 0.18, 1)
-            contenu.fond_rect = RoundedRectangle(pos=contenu.pos, size=contenu.size, radius=[dp(25)])
-        contenu.bind(pos=lambda inst, val: setattr(inst.fond_rect, 'pos', val),
-                     size=lambda inst, val: setattr(inst.fond_rect, 'size', val))
-
-        lbl_titre = Label(
-            text="IDENTIFIANT CRÉÉ AVEC SUCCÈS !",
-            font_size='18sp',
-            bold=True,
-            color=(0.2, 0.9, 0.5, 1),
-            size_hint_y=None,
-            height=dp(40),
-            halign='center', valign='middle'
-        )
-        lbl_titre.bind(size=lambda s, w: setattr(s, 'text_size', w))
-        contenu.add_widget(lbl_titre)
-
-        texte_details = (
-            f"Félicitations [b]{self.nom_utilisateur}[/b] !\n\n"
-            "Ton compte est désormais lié à un identifiant unique permanent "
-            "Sécurisé et enregistré dans ton appareil :\n\n"
-            f"[size=24sp][color=ffd700][b]{identifiant_cree}[/b][/color][/size]\n\n"
-            "[i]Cet identifiant sera transmis à l'IA pour personnaliser toutes tes analyses.[/i]"
-        )
-
-        lbl_message = Label(
-            text=texte_details,
-            markup=True,
-            font_size='15sp',
-            halign='center',
-            valign='middle',
-            color=(0.95, 0.95, 0.95, 1),
-            size_hint_y=None
-        )
-        lbl_message.bind(
-            width=lambda s, w: setattr(s, 'text_size', (w - dp(20), None)),
-            texture_size=lambda s, t: setattr(s, 'height', t[1] + dp(10))
-        )
-        contenu.add_widget(lbl_message)
-        contenu.add_widget(bouton_neon("Copier mon identifiant", cb=self.copier_identifiant, h=46))
-
-        btn_continuer = Button(
-            text="Continuer",
-            font_size='18sp',
-            bold=True,
-            size_hint=(1, None),
-            height=dp(50),
-            background_color=(0, 0, 0, 0),
-            color=(1, 1, 1, 1)
-        )
-
-        with btn_continuer.canvas.before:
-            Color(0, 0, 0, 0.4)
-            btn_continuer.ombre = RoundedRectangle(pos=(btn_continuer.x + dp(3), btn_continuer.y - dp(3)), size=btn_continuer.size, radius=[dp(22)])
-            Color(0.14, 0.09, 0.32, 1)
-            btn_continuer.fond = RoundedRectangle(pos=btn_continuer.pos, size=btn_continuer.size, radius=[dp(22)])
-
-        btn_continuer.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
-        btn_continuer.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-
-        contenu.add_widget(btn_continuer)
-
-        popup_id = Popup(
-            title="",
-            separator_height=0,
-            content=contenu,
-            size_hint=(0.88, 0.8),
-            auto_dismiss=True
-        )
-
-        AndroidMathWebView.masquer_tous()
-        popup_id.bind(on_dismiss=lambda *args: (AndroidMathWebView.afficher_tous(), self.afficher_menu_principal_modes()))
-        btn_continuer.bind(on_release=popup_id.dismiss)
-        popup_id.open()
+        """Écran (et non plus un popup) : l'identifiant s'affiche, « Continuer » ouvre le menu."""
+        self._ecran("Compte prêt", "", 0.08)
+        L = self.interaction_layout
+        L.add_widget(etiquette(f"Félicitations {self.nom_utilisateur} !", taille="22sp", gras=True, couleur=(0.2, 0.9, 0.5, 1)))
+        L.add_widget(etiquette("Ton identifiant unique et permanent est :", taille="16sp"))
+        L.add_widget(etiquette(str(identifiant_cree), taille="32sp", gras=True, couleur=(1, 0.84, 0, 1)))
+        L.add_widget(etiquette("Note-le bien : avec ton mot de passe, il te permet de retrouver ton compte sur un autre téléphone.",
+                               taille="14sp", couleur=(0.75, 0.78, 0.95, 1)))
+        L.add_widget(bouton_neon("Copier mon identifiant", (0.12, 0.08, 0.26, 1), self.copier_identifiant, h=52))
+        L.add_widget(bouton_neon("Continuer", (0.13, 0.80, 0.42, 1), self.afficher_menu_principal_modes, h=58, font="19sp",
+                                 neon=(0.13, 0.80, 0.42, 1)))
+        self._fixer_hauteur()
 
     def afficher_menu_principal_modes(self):
         self._arreter_poll_salon()
@@ -1670,7 +1795,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.interaction_layout.height = hauteur_totale + dp(120)
         self.interaction_layout.add_widget(grille_activites)
 
-        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(10), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+        btn_retour = Button(text="« Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(10), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         self.interaction_layout.add_widget(btn_retour)
         with btn_retour.canvas.before:
@@ -1686,7 +1811,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.info_label.text = f"Activité : {nom_activite}"
         self.question_label.text = f"Session de l'activité '{nom_activite}' lancée avec succès.\nBonne concentration !"
 
-        btn_retour = Button(text="← Retour aux niveaux", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+        btn_retour = Button(text="« Retour aux niveaux", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_retour.bind(on_press=self.afficher_sous_menu_niveaux_activites)
         self.interaction_layout.add_widget(btn_retour)
         with btn_retour.canvas.before:
@@ -1741,7 +1866,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             btn_geometrie.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_geometrie.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+        btn_retour = Button(text="« Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         with btn_retour.canvas.before:
             Color(0, 0, 0, 0.3)
@@ -1761,7 +1886,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.info_label.text = f"Défi : {type_defi}"
         self.question_label.text = f"Le module spécial '{type_defi}' est en cours de déploiement pour propulser ton niveau vers les sommets."
 
-        btn_retour = Button(text="← Retour aux sujets", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+        btn_retour = Button(text="« Retour aux sujets", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_retour.bind(on_press=self.afficher_sous_menu_sujets_casse_tete)
         self.interaction_layout.add_widget(btn_retour)
         with btn_retour.canvas.before:
@@ -1800,7 +1925,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             btn_ouvrir_popup.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
         self.interaction_layout.add_widget(btn_ouvrir_popup)
 
-        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', size_hint=(1, None), height=dp(50), background_color=(0, 0, 0, 0))
+        btn_retour = Button(text="« Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', size_hint=(1, None), height=dp(50), background_color=(0, 0, 0, 0))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         self.interaction_layout.add_widget(btn_retour)
         with btn_retour.canvas.before:
@@ -2017,7 +2142,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         )
 
         btn_retour_pop = Button(
-            text="⬅ Retour",
+            text="« Retour",
             font_size='15sp', bold=True,
             size_hint=(0.4, 1),
             background_color=(0, 0, 0, 0),
@@ -2184,6 +2309,12 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             'bonne_reponse': correct,
             'explication': exp,
             'index_correct': index_correct_multi,
+            # versions LaTeX pour le rendu mathématique
+            'enonce_latex': enonce,
+            'options': opts,
+            'bonne_latex': opts[index_correct_multi],
+            'explication_latex': q.get("explication", ""),
+            'uid': time.time(),
         }
 
         if hasattr(self, 'scroll_texte') and self.scroll_texte:
@@ -2194,91 +2325,92 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.rafraichir_plateau_multijoueur()
 
     def rafraichir_plateau_multijoueur(self):
-        self.interaction_layout.clear_widgets()
-        conteneur_jeu = BoxLayout(orientation='vertical', spacing=dp(4), padding=dp(4), size_hint=(1, 1))
+        """La page (énoncé + propositions en KaTeX) n'est construite qu'une fois par question ;
+        seule la zone des joueurs (boutons A, B, C, D) est rafraîchie."""
+        q = self.question_en_cours_multi
+        zone = getattr(self, 'zone_multi', None)
+        if zone is None or zone.parent is None or getattr(self, '_uid_plateau', None) != q.get('uid'):
+            self._construire_plateau_multi()
+        self._remplir_joueurs_multi()
 
+    def _construire_plateau_multi(self):
+        q = self.question_en_cours_multi
+        self.interaction_layout.clear_widgets()
+        self._disposition_question()
+        self._uid_plateau = q.get('uid')
+        self._sig_joueurs = None
+
+        zone = BoxLayout(orientation='vertical', size_hint=(1, 1), spacing=dp(4))
+        web = AndroidMathWebView(size_hint=(1, 0.55))
+        web.set_question({"enonce": q['enonce_latex'], "options": q['options'], "explication": ""},
+                         titre_tete=f"{q['chapitre']} · Q{self.numero_question_multi}/{self.total_questions_par_joueur}",
+                         avec_explication=False)
+        zone.add_widget(web)
+
+        self.lbl_chrono_multi = Label(text="", font_size='15sp', bold=True, size_hint=(1, None), height=0, color=(1, 0.2, 0.2, 1))
+        zone.add_widget(self.lbl_chrono_multi)
+
+        cols_count = 2 if len(self.joueurs_data) >= 2 else 1
+        scroll = ScrollView(size_hint=(1, 0.45), do_scroll_x=False)
+        self.grille_joueurs = GridLayout(cols=cols_count, spacing=dp(5), padding=dp(2), size_hint_y=None)
+        self.grille_joueurs.bind(minimum_height=self.grille_joueurs.setter('height'))
+        scroll.add_widget(self.grille_joueurs)
+        zone.add_widget(scroll)
+
+        barre = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(46))
+        btn_q = Button(text="« Quitter la partie", halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1),
+                       font_size='16sp', bold=True)
+        btn_q.bind(on_press=self.quitter_partie_multi)
+        barre.add_widget(btn_q)
+        zone.add_widget(barre)
+        self.interaction_layout.add_widget(zone)
+        self.zone_multi = zone
+
+    def _remplir_joueurs_multi(self):
+        q = self.question_en_cours_multi
         nb_reponses = sum(1 for j in self.joueurs_data if j['a_repondu_tour'])
         majorite = math.ceil(len(self.joueurs_data) / 2.0)
 
         if nb_reponses >= majorite and hasattr(self, 'temps_restant'):
-            txt_chrono = f"  COMPTE À REBOURS : {self.temps_restant}s !"
-            col_head = (1, 0.2, 0.2, 1)
+            self.lbl_chrono_multi.text = f"COMPTE À REBOURS : {self.temps_restant}s !"
+            self.lbl_chrono_multi.height = dp(26)
         else:
-            txt_chrono = ""
-            col_head = (1, 1, 1, 1)
+            self.lbl_chrono_multi.text = ""
+            self.lbl_chrono_multi.height = 0
 
-        lbl_head = Label(
-            text=f"Question {self.numero_question_multi}/{self.total_questions_par_joueur}{txt_chrono}\n{self.question_en_cours_multi['enonce']}",
-            font_size='13sp', bold=True,
-            color=col_head,
-            size_hint=(1, None),
-            halign='center', valign='middle'
-        )
+        sig = tuple((j['nom'], j['score'], j['a_repondu_tour']) for j in self.joueurs_data)
+        if sig == getattr(self, '_sig_joueurs', None):
+            return                      # rien n'a changé : on ne recrée pas les boutons (évite de perdre un appui)
+        self._sig_joueurs = sig
 
-        def ajuster_hauteur_enonce(instance, texture_size):
-            instance.height = max(dp(65), texture_size[1] + dp(10))
-
-        lbl_head.bind(
-            width=lambda inst, w: setattr(inst, 'text_size', (w - dp(10), None)),
-            texture_size=ajuster_hauteur_enonce
-        )
-        conteneur_jeu.add_widget(lbl_head)
-
-        cols_count = 2 if len(self.joueurs_data) >= 2 else 1
-        plateau = GridLayout(cols=cols_count, spacing=dp(5), padding=dp(2), size_hint=(1, 1))
-
-        options_txt = self.question_en_cours_multi["options_txt"]
-
+        grille = self.grille_joueurs
+        grille.clear_widgets()
+        nb_opts = len(q["options_txt"])
         for j in self.joueurs_data:
-            zone_j = BoxLayout(orientation='vertical', padding=dp(6), spacing=dp(4), size_hint=(1, 1))
-
+            zone_j = BoxLayout(orientation='vertical', padding=dp(6), spacing=dp(4), size_hint_y=None, height=dp(104))
             with zone_j.canvas.before:
                 Color(*j['couleur'])
                 zone_j.bg = RoundedRectangle(pos=zone_j.pos, size=zone_j.size, radius=[dp(8)])
                 zone_j.bind(pos=lambda inst, val: setattr(inst.bg, 'pos', val))
                 zone_j.bind(size=lambda inst, val: setattr(inst.bg, 'size', val))
-
-            lbl_j_head = Label(
-                text=f"{j['nom']} ({j['score']} pts)",
-                font_size='13sp', bold=True,
-                size_hint_y=None, height=dp(20)
-            )
-            zone_j.add_widget(lbl_j_head)
-
+            zone_j.add_widget(Label(text=f"{j['nom']} ({j['score']} pts)", font_size='13sp', bold=True,
+                                    size_hint_y=None, height=dp(22)))
             if not j['a_repondu_tour']:
-                scroll_opts = ScrollView(size_hint=(1, 1), do_scroll_x=False)
-                box_opts = BoxLayout(orientation='vertical', spacing=dp(4), size_hint_y=None)
-                box_opts.bind(minimum_height=box_opts.setter('height'))
-
-                for idx, opt_txt in enumerate(options_txt):
-                    btn_opt = Button(
-                        text=str(opt_txt),
-                        font_size='12sp', bold=True,
-                        size_hint=(1, None),
-                        background_color=(0.1, 0.1, 0.15, 0.95),
-                        color=(1, 1, 1, 1)
-                    )
-                    btn_opt.bind(
-                        width=lambda inst, w: setattr(inst, 'text_size', (w - dp(10), None)),
-                        texture_size=lambda inst, t: setattr(inst, 'height', max(dp(36), t[1] + dp(8)))
-                    )
-                    btn_opt.bind(on_press=lambda x, i_choix=idx, player=j: self.enregistrer_choix_joueur(player, i_choix))
-                    box_opts.add_widget(btn_opt)
-
-                scroll_opts.add_widget(box_opts)
-                zone_j.add_widget(scroll_opts)
+                rangee = GridLayout(cols=nb_opts, spacing=dp(4), size_hint_y=None, height=dp(52))
+                for idx in range(nb_opts):
+                    btn = Button(text=LETTRES[idx], font_size='22sp', bold=True, background_color=(0.1, 0.1, 0.15, 0.95))
+                    btn.bind(on_press=lambda x, i_choix=idx, player=j: self.enregistrer_choix_joueur(player, i_choix))
+                    rangee.add_widget(btn)
+                zone_j.add_widget(rangee)
             else:
-                lbl_valide = Label(
-                    text="Réponse envoyée !",
-                    font_size='12sp', bold=True,
-                    color=(0.9, 0.9, 0.9, 0.85)
-                )
-                zone_j.add_widget(lbl_valide)
+                zone_j.add_widget(Label(text="Réponse envoyée !", font_size='12sp', bold=True, color=(0.9, 0.9, 0.9, 0.85)))
+            grille.add_widget(zone_j)
 
-            plateau.add_widget(zone_j)
-
-        conteneur_jeu.add_widget(plateau)
-        self.interaction_layout.add_widget(conteneur_jeu)
+    def quitter_partie_multi(self, *args):
+        if getattr(self, 'timer_event', None):
+            self.timer_event.cancel()
+            self.timer_event = None
+        self.restaurer_ecran_et_accueil()
 
     def enregistrer_choix_joueur(self, joueur, index_choix):
         joueur['a_repondu_tour'] = True
@@ -2332,7 +2464,11 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
                     'correcte': q['bonne_reponse'],
                     'statut': est_correct,
                     'explication': q.get('explication', ''),
-                    'disqualifie': False
+                    'disqualifie': False,
+                    'enonce_latex': q.get('enonce_latex', ''),
+                    'choix_latex': q['options'][rep] if 0 <= rep < len(q['options']) else '—',
+                    'correcte_latex': q.get('bonne_latex', ''),
+                    'explication_latex': q.get('explication_latex', ''),
                 })
             else:
                 self.historique_global_multi.append({
@@ -2342,13 +2478,18 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
                     'correcte': q['bonne_reponse'],
                     'statut': False,
                     'explication': 'Aucune évaluation car disqualifié pour ce tour.',
-                    'disqualifie': True
+                    'disqualifie': True,
+                    'enonce_latex': q.get('enonce_latex', ''),
+                    'choix_latex': 'Aucune réponse (temps écoulé)',
+                    'correcte_latex': q.get('bonne_latex', ''),
+                    'explication_latex': '',
                 })
 
         self.numero_question_multi += 1
         self.lancer_prochain_tour_multijoueur()
 
     def afficher_ecran_resume_multijoueur(self):
+        self._disposition_standard()
         self.interaction_layout.clear_widgets()
         self.scroll_texte.clear_widgets()
         self.scroll_texte.size_hint_y = 1.0
@@ -2366,81 +2507,19 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             spacing=dp(8)
         )
 
-        scroll_explications = ScrollView(
-            size_hint=(1, 1),
-            do_scroll_x=False,
-            do_scroll_y=True,
-            bar_width=dp(6)
-        )
-
-        layout_contenu_texte = BoxLayout(
-            orientation='vertical',
-            spacing=dp(12),
-            size_hint_y=None,
-            padding=[dp(4), dp(4), dp(4), dp(10)]
-        )
-        layout_contenu_texte.bind(minimum_height=layout_contenu_texte.setter('height'))
-
+        web_resume = AndroidMathWebView(size_hint=(1, 1))
+        cartes = []
         for item in self.historique_global_multi:
-            card_item = BoxLayout(
-                orientation='horizontal',
-                size_hint=(1, None),
-                spacing=dp(10),
-                padding=[dp(10), dp(10), dp(10), dp(10)]
-            )
-
-            with card_item.canvas.before:
-                Color(0.08, 0.12, 0.22, 0.95)
-                card_item.bg = RoundedRectangle(pos=card_item.pos, size=card_item.size, radius=[dp(10)])
-                card_item.bind(pos=lambda inst, val: setattr(inst.bg, 'pos', val))
-                card_item.bind(size=lambda inst, val: setattr(inst.bg, 'size', val))
-
-            path_succes = "icone_appli/succes.png"
-            path_erreur = "icone_appli/erreur.png"
-            target_path = path_succes if item['statut'] else path_erreur
-
-            if os.path.exists(target_path):
-                img_statut = Image(
-                    source=target_path,
-                    size_hint=(None, None),
-                    size=(dp(28), dp(28)),
-                    pos_hint={'center_y': 0.5}
-                )
-                card_item.add_widget(img_statut)
-
-            couleur_texte = (0.2, 0.9, 0.4, 1) if item['statut'] else (1, 0.35, 0.35, 1)
             statut_txt = "Correct" if item['statut'] else ("Disqualifié" if item.get('disqualifie') else "Incorrect")
-
-            txt_detail = (
-                f"[{item['joueur']}] - {statut_txt}\n"
-                f"{item['enonce']}\n"
-                f" Ta réponse : {item['choix']} |  Attendu : {item['correcte']}\n"
-                f" Explication : {item['explication']}"
-            )
-
-            lbl_item = Label(
-                text=txt_detail,
-                font_size='13sp',
-                color=couleur_texte,
-                size_hint=(1, None),
-                halign='left',
-                valign='top'
-            )
-
-            def calculer_hauteur(instance, texture_size, carte=card_item):
-                instance.height = texture_size[1]
-                carte.height = texture_size[1] + dp(24)
-
-            lbl_item.bind(
-                width=lambda inst, w: setattr(inst, 'text_size', (w, None)),
-                texture_size=calculer_hauteur
-            )
-
-            card_item.add_widget(lbl_item)
-            layout_contenu_texte.add_widget(card_item)
-
-        scroll_explications.add_widget(layout_contenu_texte)
-        racine_resume.add_widget(scroll_explications)
+            corps = (f"{item.get('enonce_latex') or item['enonce']}\n\n"
+                     f"Réponse donnée : {item.get('choix_latex') or item['choix']}\n"
+                     f"Réponse attendue : {item.get('correcte_latex') or item['correcte']}")
+            exp = item.get('explication_latex') or ''
+            if exp:
+                corps += f"\n\nExplication :\n{exp}"
+            cartes.append((f"{item['joueur']} · {statut_txt}", corps, 'ok' if item['statut'] else 'ko'))
+        web_resume.set_document("Résumé de la partie", cartes)
+        racine_resume.add_widget(web_resume)
 
         layout_3_boutons = BoxLayout(
             orientation='horizontal',
@@ -2599,7 +2678,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             btn_modules_maitrise.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_modules_maitrise.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        btn_retour = Button(text="← Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
+        btn_retour = Button(text="« Revenir à l'Accueil", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         with btn_retour.canvas.before:
             Color(0, 0, 0, 0.3)
@@ -2656,7 +2735,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             )
 
             img_rang = Image(
-                source='icone_appli/sinchronisation.png',
+                source='icone_appli/synchronisation.png',
                 size_hint=(None, None),
                 size=(dp(24), dp(24))
             )
@@ -2676,7 +2755,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
 
             layout_liste_scroll.add_widget(layout_rang)
 
-        self.btn_retour_isole.text = "← Retour Évolution"
+        self.btn_retour_isole.text = "« Retour Évolution"
         self._lier_retour_isole(self.restaurer_ecran_initial_apres_stats)
         self.main_layout.add_widget(self.btn_retour_isole)
 
@@ -2717,7 +2796,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
 
         self.scroll_texte.add_widget(layout_modules_scroll)
 
-        self.btn_retour_isole.text = "← Retour Évolution"
+        self.btn_retour_isole.text = "« Retour Évolution"
         self._lier_retour_isole(self.restaurer_ecran_initial_apres_stats)
         self.main_layout.add_widget(self.btn_retour_isole)
 
@@ -2813,7 +2892,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
                 btn.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
             self.interaction_layout.add_widget(btn)
 
-        btn_retour = Button(text="← Revenir à l'Accueil", size_hint_y=None, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', height=dp(50), font_size='22sp', bold=True, background_color=(0, 0, 0, 0))
+        btn_retour = Button(text="« Revenir à l'Accueil", size_hint_y=None, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', height=dp(50), font_size='22sp', bold=True, background_color=(0, 0, 0, 0))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_principal_modes())
         with btn_retour.canvas.before:
             Color(0, 0, 0, 0.3)
@@ -2845,7 +2924,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
                 btn.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
             self.interaction_layout.add_widget(btn)
 
-        btn_retour = Button(text="← Étape Précédente", size_hint_y=None, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', height=dp(50), font_size='22sp', bold=True, background_color=(0, 0, 0, 0))
+        btn_retour = Button(text="« Étape Précédente", size_hint_y=None, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', height=dp(50), font_size='22sp', bold=True, background_color=(0, 0, 0, 0))
         btn_retour.bind(on_press=lambda x: self.afficher_menu_niveaux())
         with btn_retour.canvas.before:
             Color(0, 0, 0, 0.3)
@@ -2891,26 +2970,26 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.arreter_chrono()
         self.nettoyer_boutons_bas()
         self.interaction_layout.clear_widgets()
-        self.scroll_texte.clear_widgets()
-
-        self.scroll_texte.size_hint_y = 1.0
-        self.scroll_interaction.size_hint_y = None
-        self.scroll_interaction.height = 0
-
         self.info_label.text = f" Formulaire de Cours\nClasse : {self.classe_actuelle}"
         self.chrono_label.text = ""
+        self._disposition_question()
 
-        contenu_cours = self.formulaire_cours.get(self.classe_actuelle, "Aucun résumé disponible pour cette classe.")
-
-        lbl_cours = Label(text=contenu_cours, font_size='20sp', size_hint_y=None, halign='left', valign='top', color=(0.9, 0.9, 0.9, 1))
-        lbl_cours.bind(width=lambda inst, val: setattr(inst, 'text_size', (val - 20, None)))
-        lbl_cours.bind(texture_size=lambda inst, size: setattr(inst, 'height', max(size[1] + 60, 500)))
-
-        self.scroll_texte.add_widget(lbl_cours)
-
-        self.btn_retour_isole.text = "← Retour au Quiz"
-        self._lier_retour_isole(self.retourner_au_quiz_apres_cours)
-        self.main_layout.add_widget(self.btn_retour_isole)
+        zone = BoxLayout(orientation='vertical', size_hint=(1, 1), spacing=dp(6))
+        fiches = FICHES_LATEX.get(self.classe_actuelle)
+        if fiches:
+            cartes = [(titre, texte, "") for titre, texte in fiches]
+        else:
+            cartes = [("Cours", self.formulaire_cours.get(self.classe_actuelle, "Aucun résumé disponible pour cette classe."), "")]
+        web = AndroidMathWebView(size_hint=(1, 1))
+        web.set_document(f"Fiche de cours · {self.classe_actuelle}", cartes)     # rendu mathématique KaTeX
+        zone.add_widget(web)
+        barre = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50))
+        btn_retour = Button(text="« Retour au Quiz", halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1),
+                            font_size='18sp', bold=True)
+        btn_retour.bind(on_press=self.retourner_au_quiz_apres_cours)
+        barre.add_widget(btn_retour)
+        zone.add_widget(barre)
+        self.interaction_layout.add_widget(zone)
 
     def retourner_au_quiz_apres_cours(self, instance):
         self.scroll_texte.clear_widgets()
@@ -2937,11 +3016,13 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.chrono_label.text = f"{self.temps_restant}s"
         if self.temps_restant <= 0:
             self.arreter_chrono()
-            self.interaction_layout.clear_widgets()
             self.combo = max(0, self.combo - 2)
             self.points_de_rang = max(0, self.points_de_rang - 3)
             self.enregistrer_statistique_reponse(self.chapitre_en_cours, False)
-            self.question_label.text = f" TEMPS ÉCOULÉ !\n\nLa bonne réponse attendue était : {self.bonne_reponse}."
+            self.info_label.text = f" {self.obtenir_rang_actuel()}\n Temps écoulé -3 PR"
+            web = getattr(self, 'web_quiz', None)
+            if web is not None:
+                web.reveler(-1, self.index_correct)
             self.creer_interface_suivante()
 
     def lancer_chrono_examen_global(self):
@@ -3065,7 +3146,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
 
         self.scroll_texte.add_widget(layout_stats_scroll)
 
-        self.btn_retour_isole.text = "← Retour Évolution"
+        self.btn_retour_isole.text = "« Retour Évolution"
         self._lier_retour_isole(self.restaurer_ecran_initial_apres_stats)
         self.main_layout.add_widget(self.btn_retour_isole)
 
@@ -3091,7 +3172,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         lbl_info.bind(texture_size=lambda inst, size: setattr(inst, 'height', max(size[1] + 60, 500)))
         self.scroll_texte.add_widget(lbl_info)
 
-        self.btn_retour_isole.text = "← Retour Évolution"
+        self.btn_retour_isole.text = "« Retour Évolution"
         self._lier_retour_isole(self.restaurer_ecran_initial_apres_stats)
         self.main_layout.add_widget(self.btn_retour_isole)
 
@@ -3109,9 +3190,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             self.info_layout.remove_widget(self.btn_parametres)
 
         self.interaction_layout.clear_widgets()
-
-        self.scroll_texte.size_hint_y = 0.22
-        self.scroll_interaction.size_hint_y = 0.78
+        self._disposition_question()
 
         try:
             idx_actuel = self.ordre_classes.index(self.classe_actuelle)
@@ -3148,37 +3227,8 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.explication_erreur = q.get("explication_txt", "")
         self.question_generee_ia = q["enonce"]
 
-        self.interaction_layout.clear_widgets()
-        web = AndroidMathWebView(size_hint=(1, None), height=dp(190))
-        web.set_question(q, titre_tete=self.chapitre_en_cours, avec_explication=False)
-        self.interaction_layout.add_widget(web)
-
-        for i, opt_txt in enumerate(q["options_txt"]):
-            btn_opt = Button(
-                text=opt_txt,
-                font_size='20sp',
-                bold=True,
-                size_hint_y=None,
-                height=dp(50),
-                background_color=(0.14, 0.09, 0.32, 1),
-                halign='center',
-                valign='middle'
-            )
-            btn_opt.bind(size=lambda inst, val: setattr(inst, 'text_size', (val[0] - 20, None)))
-            btn_opt.bind(on_press=lambda inst, idx=i: self.verifier_choix_par_index(idx))
-            self.interaction_layout.add_widget(btn_opt)
-
-        layout_actions = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(10))
-
-        btn_quitter = Button(text="← Quitter", text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1), font_size='18sp', bold=True)
-        btn_quitter.bind(on_press=self.quitter_action)
-
-        btn_aide = Button(text="Fiches Cours", text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0.3, 0.2, 0.6, 1), font_size='18sp', bold=True)
-        btn_aide.bind(on_press=self.afficher_formulaire_cours)
-        layout_actions.add_widget(btn_quitter)
-        layout_actions.add_widget(btn_aide)
-        self.interaction_layout.add_widget(layout_actions)
-
+        # page KaTeX : énoncé + propositions cliquables (rendu mathématique), barre de boutons en bas
+        self._construire_zone_quiz(q, self.chapitre_en_cours, self.verifier_choix_par_index, avec_explication=True)
         self.lancer_chrono_entrainement()
 
     def quitter_action(self, instance):
@@ -3190,7 +3240,6 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
     def verifier_choix_par_index(self, index_choisi):
         self.arreter_chrono()
         temps_mis = Clock.get_time() - self.temps_debut_question
-        self.interaction_layout.clear_widgets()
 
         est_correct = (index_choisi == self.index_correct)
         SoundManager.play("succes" if est_correct else "erreur")
@@ -3200,54 +3249,59 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             bonus_vitesse = 2 if temps_mis < 7.0 else 0
             gain = 2 + bonus_vitesse
             self.points_de_rang += gain
-            texte = f" Correct {self.nom_utilisateur} !\n\n+{gain} Points de Rang (Temps : {temps_mis:.1f}s)\nCombo : x{self.combo}"
+            bilan = f"Correct +{gain} PR ({temps_mis:.1f}s) x{self.combo}"
         else:
             self.combo = max(0, self.combo - 2)
             self.points_de_rang = max(0, self.points_de_rang - 3)
-            texte = f" ERREUR SUR CETTE NOTION.\nLa réponse attendue était : {self.bonne_reponse}.\n\n"
-            if self.explication_erreur:
-                texte += f"DÉVELOPPEMENT ALGÉBRIQUE RIGOUREUX :\n{self.explication_erreur}"
+            bilan = "Faux -3 PR"
 
         self.historique_scores.append(self.points_de_rang)
         self.enregistrer_statistique_reponse(self.chapitre_en_cours, est_correct)
         self.synchroniser_profil()
-        self.question_label.text = texte
+        self.info_label.text = f" {self.obtenir_rang_actuel()}\n {bilan}"
 
-        taille_initiale = self.question_label.font_size
-        couleur_origine = self.question_label.color[:]
-
-        couleur_flash = [0.1, 0.9, 0.3, 1] if est_correct else [0.9, 0.2, 0.2, 1]
-
-        self.question_label.opacity = 0.3
-        self.question_label.color = couleur_flash
-
-        anim = (
-            Animation(opacity=1.0, font_size=taille_initiale * 1.25, duration=0.12, t='out_quad') +
-            Animation(font_size=taille_initiale, color=couleur_origine, duration=0.25, t='out_bounce')
-        )
-        anim.start(self.question_label)
+        # la correction (vert / rouge + démonstration en LaTeX) s'affiche dans la page elle-même
+        web = getattr(self, 'web_quiz', None)
+        if web is not None:
+            web.reveler(index_choisi, self.index_correct)
         self.creer_interface_suivante()
 
     def creer_interface_suivante(self):
-        self.label_flou = Label(text="C'est encore flou ? Écris-nous ci-dessous :", font_size='18sp', size_hint=(1, None), height=dp(45), color=(0.8, 0.8, 0.8, 1))
-        self.interaction_layout.add_widget(self.label_flou)
+        """Après la réponse : Quitter / Un doute ? / Continuer (la page de correction reste affichée au-dessus)."""
+        barre = getattr(self, 'barre_quiz', None)
+        if barre is None:
+            return
+        barre.clear_widgets()
+        btn_quitter = Button(text="« Quitter", halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1),
+                             font_size='16sp', bold=True)
+        btn_quitter.bind(on_press=self.quitter_action)
+        btn_avis = Button(text="Un doute ?", halign='center', valign='middle', background_color=(0.831, 0.682, 0.216, 1),
+                          font_size='16sp', bold=True)
+        btn_avis.bind(on_press=lambda x: self.ouvrir_popup_avis())
+        btn_suivant = Button(text="Continuer »", halign='center', valign='middle', background_color=(0.2, 0.7, 0.4, 1),
+                             font_size='16sp', bold=True)
+        btn_suivant.bind(on_press=lambda x: self.generer_question_dynamique())
+        for b in (btn_quitter, btn_avis, btn_suivant):
+            barre.add_widget(b)
 
-        self.input_avis_texte = TextInput(hint_text="Précise ta difficulté ici...", multiline=True, size_hint=(1, None), background_color=(0.6, 0, 0.9, 0.8), height=dp(100), font_size='18sp')
-        self.input_whatsapp_tek = TextInput(hint_text="Ton numéro WhatsApp...", multiline=False, size_hint=(1, None), background_color=(0.6, 0, 0.9, 0.8), height=dp(40), font_size='18sp')
-
-        self.interaction_layout.add_widget(self.input_avis_texte)
-        self.interaction_layout.add_widget(self.input_whatsapp_tek)
-
-        self.feedback_layout = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(40), spacing=dp(10))
+    def ouvrir_popup_avis(self):
+        contenu = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(8))
+        contenu.add_widget(etiquette("C'est encore flou ? Écris-nous ci-dessous :", taille="16sp"))
+        self.input_avis_texte = TextInput(hint_text="Précise ta difficulté ici...", multiline=True, background_color=(0.6, 0, 0.9, 0.8), font_size='18sp')
+        self.input_whatsapp_tek = TextInput(hint_text="Ton numéro WhatsApp...", multiline=False, size_hint=(1, None), height=dp(44), background_color=(0.6, 0, 0.9, 0.8), font_size='18sp')
+        contenu.add_widget(self.input_avis_texte)
+        contenu.add_widget(self.input_whatsapp_tek)
+        self.feedback_layout = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(46), spacing=dp(6))
         for diff in ["Simple", "Abordable", "Moyen", "Complexe"]:
-            btn_diff = Button(text=diff, font_size='16sp', bold=True, background_color=(0.831, 0.682, 0.216, 1))
+            btn_diff = Button(text=diff, font_size='14sp', bold=True, background_color=(0.831, 0.682, 0.216, 1))
             btn_diff.bind(on_press=lambda inst, df=diff: self.preparer_retours_developpeur_local(df))
             self.feedback_layout.add_widget(btn_diff)
-        self.interaction_layout.add_widget(self.feedback_layout)
-
-        btn_suivant = Button(text="Continuer →", font_size='22sp', bold=True, size_hint=(1, None), height=dp(50), background_color=(0.2, 0.7, 0.4, 1))
-        btn_suivant.bind(on_press=lambda x: self.generer_question_dynamique())
-        self.interaction_layout.add_widget(btn_suivant)
+        contenu.add_widget(self.feedback_layout)
+        popup = self._popup("Ton avis", contenu, (0.95, 0.8))
+        btn_fermer = Button(text="Fermer", size_hint=(1, None), height=dp(46), bold=True, background_color=(0.75, 0.2, 0.2, 1))
+        btn_fermer.bind(on_press=popup.dismiss)
+        contenu.add_widget(btn_fermer)
+        popup.open()
 
     def preparer_retours_developpeur_local(self, evaluation):
         texte_saisi = ""
@@ -3289,7 +3343,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
                 "user": avis_a_envoyer['user'],
                 "msg": avis_a_envoyer['msg']
             })
-            headers = {'Content-type': 'application/json'}
+            headers = self.en_tetes_api()
 
             UrlRequest(
                 url_officiel,
@@ -3320,9 +3374,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             self.info_layout.remove_widget(self.btn_parametres)
 
         self.interaction_layout.clear_widgets()
-
-        self.scroll_texte.size_hint_y = 0.22
-        self.scroll_interaction.size_hint_y = 0.78
+        self._disposition_question()
 
         chapitre_cible = self.examen_questions[self.examen_index_actuel]
         self.chapitre_en_cours = chapitre_cible
@@ -3342,48 +3394,20 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.index_correct = q["index_correct"]
         self.explication_erreur = q.get("explication_txt", "")
 
-        self.interaction_layout.clear_widgets()
-        web = AndroidMathWebView(size_hint=(1, None), height=dp(190))
-        web.set_question(q, titre_tete=f"Question {self.examen_index_actuel+1}/10", avec_explication=False)
-        self.interaction_layout.add_widget(web)
-
-        layout_actions = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(50), spacing=dp(10))
-        btn_quitter = Button(text="← Quitter", text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1), font_size='18sp', bold=True)
-        btn_quitter.bind(on_press=self.quitter_action)
-        btn_aide = Button(text="Fiches Cours", text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0.3, 0.2, 0.6, 1), font_size='18sp', bold=True)
-        btn_aide.bind(on_press=self.afficher_formulaire_cours)
-        layout_actions.add_widget(btn_quitter)
-        layout_actions.add_widget(btn_aide)
-
-        for i, opt_txt in enumerate(q["options_txt"]):
-            btn_opt = Button(
-                text=opt_txt,
-                font_size='22sp',
-                bold=True,
-                size_hint_y=None,
-                height=dp(50),
-                text_size=(None, None),
-                background_color=(0.14, 0.09, 0.32, 1),
-                halign='center',
-                valign='middle'
-            )
-            btn_opt.padding = [10, 10]
-            btn_opt.bind(size=lambda instance, value: setattr(instance, 'text_size', (value[0] - 20, None)))
-            btn_opt.bind(on_press=lambda inst, idx=i: self.valider_choix_examen_par_index(idx))
-            self.interaction_layout.add_widget(btn_opt)
-        self.interaction_layout.add_widget(layout_actions)
+        self._construire_zone_quiz(q, f"Question {self.examen_index_actuel + 1}/10",
+                                   self.valider_choix_examen_par_index, avec_explication=False)
 
     def valider_choix_examen_par_index(self, index_choisi):
         q = self.question_courante
-        choix_txt = q["options_txt"][index_choisi] if 0 <= index_choisi < len(q["options_txt"]) else "—"
-        self.examen_reponses_eleve.append((
-            q.get("enonce_txt", ""),
-            choix_txt,
-            q["options_txt"][q["index_correct"]],
-            q.get("explication_txt", ""),
-        ))
-
+        valide = 0 <= index_choisi < len(q["options"])
         est_correct = (index_choisi == q["index_correct"])
+        self.examen_reponses_eleve.append({
+            "enonce": q["enonce"],
+            "choix": q["options"][index_choisi] if valide else "—",
+            "bonne": q["options"][q["index_correct"]],
+            "explication": q.get("explication", ""),
+            "ok": est_correct,
+        })
         if est_correct:
             self.score += 1
 
@@ -3397,7 +3421,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             self.terminer_et_afficher_bilan_examen()
 
     def terminer_et_afficher_bilan_examen(self):
-        self.interaction_layout.clear_widgets()
+        self.arreter_chrono()
         self.chrono_label.text = "FIN"
 
         note_sur_20 = (self.score / 10) * 20
@@ -3415,49 +3439,43 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
 
         self.historique_scores.append(self.points_de_rang)
         self.sauvegarder_donnees_locales()
-
         rang_actuel = self.obtenir_rang_actuel()
 
-        self.scroll_texte.size_hint_y = 0.90
-        self.scroll_interaction.size_hint_y = 0.10
+        self.interaction_layout.clear_widgets()
+        self._disposition_question()
+        zone = BoxLayout(orientation='vertical', size_hint=(1, 1), spacing=dp(6))
 
-        graph_widget = BoxLayout(orientation='vertical', size_hint=(1, None), height=dp(20), padding=dp(15))
-        with graph_widget.canvas.before:
-            Color(0.14, 0.14, 0.18, 1)
-            Rectangle(pos=graph_widget.pos, size=graph_widget.size)
-
-        lbl_rank_visuel = Label(text=f" RÉSUMÉ DE FIN DE SAISSION - {mention}\nGRADE ACTUEL : {rang_actuel}\n TOTAL SCORE : {self.points_de_rang} PR",
-                                font_size='16sp', bold=True, color=(1, 1, 1, 1), halign='center')
-        graph_widget.add_widget(lbl_rank_visuel)
-
-        jauge_box = BoxLayout(size_hint=(1, None), height=dp(40), padding=[20, 0, 20, 0])
         _, rp_c, s_r, _ = self.determiner_rang_et_details()
         valeur_jauge = min(100, int((float(rp_c) / float(s_r)) * 100))
-        pb_ff_style = ProgressBar(max=100, value=valeur_jauge, size_hint=(1, None), height=dp(30))
-        jauge_box.add_widget(pb_ff_style)
-        graph_widget.add_widget(jauge_box)
+        entete = BoxLayout(orientation='vertical', size_hint=(1, None), height=dp(70), padding=[dp(10), 0])
+        entete.add_widget(Label(text=f"{mention}  |  GRADE : {rang_actuel}  |  {self.points_de_rang} PR",
+                                font_size='14sp', bold=True, halign='center'))
+        entete.add_widget(ProgressBar(max=100, value=valeur_jauge, size_hint=(1, None), height=dp(18)))
+        zone.add_widget(entete)
 
-        self.interaction_layout.add_widget(graph_widget)
-
-        bilan_texte = f"RÉSULTAT EXAMEN DE {self.nom_utilisateur}\nNote globale : {note_sur_20:.1f}/20\n\n"
-        bilan_texte += "========================================\n"
-        bilan_texte += "--- CORRECTIONS DÉTAILLÉES ---\n"
-        bilan_texte += "========================================\n"
-
-        for i, (q, recu, bon, exp) in enumerate(self.examen_reponses_eleve):
-            bilan_texte += f"\n[ Question {i+1} ]\n"
-            bilan_texte += f"Énoncé : {q}\n"
-
-            if recu == bon:
-                bilan_texte += f"Statut : [ CORRECT ] (Votre réponse : {recu})\n"
+        # corrections détaillées : rendu mathématique complet (énoncés, réponses, démonstrations)
+        cartes = [("Résultat", f"{self.nom_utilisateur} : {note_sur_20:.1f}/20", "")]
+        for i, r in enumerate(self.examen_reponses_eleve):
+            corps = f"{r['enonce']}\n\nTa réponse : {r['choix']}"
+            if r["ok"]:
+                titre = f"Question {i + 1} · Correct"
             else:
-                bilan_texte += f"Statut : [ À REVOIR ]\n"
-                bilan_texte += f"• Votre réponse : {recu}\n"
-                bilan_texte += f"• Réponse attendue : {bon}\n"
-                bilan_texte += f"\n--- DÉMONSTRATION ALGÉBRIQUE ---\n{exp}\n"
+                titre = f"Question {i + 1} · À revoir"
+                corps += f"\nRéponse attendue : {r['bonne']}"
+                if r["explication"]:
+                    corps += f"\n\nDémonstration :\n{r['explication']}"
+            cartes.append((titre, corps, "ok" if r["ok"] else "ko"))
+        web = AndroidMathWebView(size_hint=(1, 1))
+        web.set_document("Corrections de l'examen", cartes)
+        zone.add_widget(web)
 
-            bilan_texte += "----------------------------------------\n"
-        self.question_label.text = bilan_texte
+        barre = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(10))
+        btn_menu = Button(text="« Retour au menu", halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1),
+                          font_size='18sp', bold=True)
+        btn_menu.bind(on_press=lambda x: self.afficher_menu_principal_modes())
+        barre.add_widget(btn_menu)
+        zone.add_widget(barre)
+        self.interaction_layout.add_widget(zone)
 
     def afficher_menu_ia_parametres(self, instance):
         if hasattr(self, 'info_layout') and hasattr(self, 'btn_parametres'):
@@ -3496,7 +3514,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
                 btn.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
         btn_retour = Button(
-            text="⬅ Retour au menu",
+            text="« Retour au menu",
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
@@ -3690,7 +3708,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             btn_envoyer.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
         btn_retour = Button(
-            text="⬅ Retour",
+            text="« Retour",
             font_size='18sp',
             bold=True,
             size_hint_y=None,
@@ -3755,7 +3773,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             "requete": texte_utilisateur
         }
 
-        headers = {'Content-Type': 'application/json'}
+        headers = self.en_tetes_api()
 
         UrlRequest(
             url,
@@ -3785,7 +3803,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             "mode": categorie
         }
 
-        headers = {'Content-Type': 'application/json'}
+        headers = self.en_tetes_api()
 
         UrlRequest(
             url,
@@ -3797,7 +3815,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         )
 
         btn_retour = Button(
-            text="⬅ Retour",
+            text="« Retour",
             font_size='18sp',
             bold=True,
             size_hint_y=None,
@@ -3898,7 +3916,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         zone_bas.add_widget(self.box_saisie)
 
         btn_retour = Button(
-            text="⬅ Retour aux requêtes",
+            text="« Retour aux requêtes",
             font_size='16sp',
             bold=True,
             size_hint=(1, None),
@@ -4027,7 +4045,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             "mode": categorie
         })
 
-        headers = {'Content-Type': 'application/json'}
+        headers = self.en_tetes_api()
 
         UrlRequest(
             url,
@@ -4135,7 +4153,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             btn_exam.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
         btn_retour = Button(
-            text="⬅ Retour",
+            text="« Retour",
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
@@ -4203,7 +4221,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             btn_sujet.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
         btn_retour = Button(
-            text="⬅ Retour",
+            text="« Retour",
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
@@ -4251,7 +4269,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
                 btn_nb.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
         btn_retour = Button(
-            text="⬅ Retour",
+            text="« Retour",
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),
@@ -4313,7 +4331,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             "chapitre": chapitre,
             "mode": mode
         }
-        headers = {'Content-Type': 'application/json'}
+        headers = self.en_tetes_api()
 
         UrlRequest(
             url,
@@ -4326,7 +4344,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         )
 
         btn_retour = Button(
-            text="⬅ Retour",
+            text="« Retour",
             font_size='18sp',
             bold=True,
             text_size=(1 * Window.width - dp(20), None),

@@ -24,6 +24,7 @@ from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from kivy.core.clipboard import Clipboard
+from kivy.core.text import Label as CoreLabel
 from kivy.core.window import Window
 from kivy.graphics import Color, Line, RoundedRectangle
 from kivy.metrics import dp
@@ -89,22 +90,69 @@ class SoundManager:
             pass
 
 
+def _hauteur_texte(w, largeur):
+    """Hauteur (px) qu'occupe le texte du widget une fois renvoyé à la ligne dans `largeur` pixels."""
+    if not w.text:
+        return 0
+    try:
+        cl = CoreLabel(text=w.text, font_size=w.font_size, bold=w.bold, markup=getattr(w, "markup", False),
+                       font_name=w.font_name, halign="center", text_size=(max(20, largeur), None))
+        cl.refresh()
+        return cl.texture.height if cl.texture else 0
+    except Exception:
+        return 0
+
+
 class Button(_KButton):
     """Remplace kivy.uix.button.Button dans main.py :
        - son de clic automatique sur chaque bouton
-       - fin contour néon (thème « dark web ») sauf pour les boutons-icônes (image)"""
+       - fin contour néon (thème « dark web ») sauf pour les boutons-icônes (image)
+       - le texte est toujours renvoyé à la ligne dans la largeur du bouton et le bouton GRANDIT en hauteur
+         (ou sa rangée horizontale) si son texte a besoin de plus de place ; il reprend sa taille d'origine sinon"""
 
     def __init__(self, **kwargs):
         icone = bool(kwargs.get("background_normal"))
         super().__init__(**kwargs)
+        self._icone = icone
         if not icone:
             with self.canvas.after:
                 Color(0.0, 0.94, 1.0, 0.45)
                 self._neon = Line(rounded_rectangle=(self.x, self.y, self.width, self.height, dp(18)), width=dp(1))
             self.bind(pos=self._maj_neon, size=self._maj_neon)
+            self._h_base = self.height if self.size_hint_y is None else None
+            self._trig_fit = Clock.create_trigger(self._ajuster, -1)
+            self.bind(width=self._trig_fit, text=self._trig_fit, font_size=self._trig_fit, parent=self._trig_fit)
 
     def _maj_neon(self, *args):
         self._neon.rounded_rectangle = (self.x, self.y, self.width, self.height, dp(18))
+
+    def _ajuster(self, *args):
+        if self._icone or not self.text or self.parent is None:
+            return
+        self.text_size = (max(dp(20), self.width - dp(16)), None)      # le texte reste dans le bouton
+        besoin = _hauteur_texte(self, self.width - dp(16)) + dp(20)
+        cible = None
+        if self.size_hint_y is None:
+            cible = self
+        else:
+            p = self.parent
+            if isinstance(p, BoxLayout) and p.orientation == "horizontal" and getattr(p, "size_hint_y", 1) is None:
+                cible = p
+        if cible is None:
+            return
+        if getattr(cible, "_h_base", None) is None:
+            cible._h_base = cible.height
+        besoins = cible.__dict__.setdefault("_besoins_fit", {})
+        besoins[id(self)] = besoin
+        nouvelle = max(cible._h_base, max(besoins.values()))
+        delta = nouvelle - cible.height
+        if abs(delta) < 1:
+            return
+        cible.height = nouvelle
+        app = App.get_running_app()
+        lay = getattr(app, "interaction_layout", None)
+        if lay is not None and not getattr(app, "_mode_question", False) and cible in list(lay.walk()):
+            lay.height = max(0, lay.height + delta)                   # le défilement suit la nouvelle hauteur
 
     def on_press(self):
         SoundManager.play("clic", 0.5)
@@ -116,7 +164,7 @@ class Button(_KButton):
 def bouton(texte, couleur=PANEL2, cb=None, h=50, font="17sp", neon=CYAN):
     b = Button(text=texte, font_size=font, bold=True, size_hint=(1, None), height=dp(h), halign="center",
                valign="middle", background_normal="", background_color=(0, 0, 0, 0), color=(1, 1, 1, 1))
-    b.bind(size=lambda i, v: setattr(i, "text_size", (v[0] - dp(14), v[1])))
+    b.bind(width=lambda i, w: setattr(i, "text_size", (w - dp(14), None)))
     b.canvas.after.clear()
     with b.canvas.before:
         Color(0, 0, 0, 0.5)
@@ -238,7 +286,17 @@ class FonctionsEnLigne:
     def url_api(self, chemin):
         return self.url_serveur.rstrip("/") + chemin
 
-    def api(self, chemin, corps=None, ok=None, err=None, timeout=5):
+    def en_tetes_api(self, json_corps=True):
+        """En-têtes communs à tous les appels serveur (jeton du compte connecté)."""
+        h = {"Accept": "application/json"}
+        if json_corps:
+            h["Content-Type"] = "application/json"
+        jeton = getattr(self, "jeton_compte", "")
+        if jeton:
+            h["Authorization"] = "Bearer " + jeton
+        return h
+
+    def api(self, chemin, corps=None, ok=None, err=None, timeout=5, jeton=None):
         def _ok(req, res):
             if isinstance(res, (str, bytes)):
                 try:
@@ -254,14 +312,23 @@ class FonctionsEnLigne:
 
         def _ko(req, e):
             msg = e.get("message", "erreur serveur") if isinstance(e, dict) else str(e)
+            if isinstance(e, dict) and "session" in str(e.get("message", "")).lower() and getattr(self, "jeton_compte", ""):
+                self.jeton_compte = ""              # jeton refusé : il faudra se reconnecter
+                try:
+                    self.sauvegarder_donnees_locales()
+                except Exception:
+                    pass
             if err:
                 err(msg)
         kw = dict(timeout=timeout, on_success=_ok, on_error=_ko, on_failure=_ko)
         if CA_FILE:
             kw["ca_file"] = CA_FILE
+        h = self.en_tetes_api(corps is not None)
+        if jeton:                                   # jeton explicite (vérification e-mail juste après l'inscription)
+            h["Authorization"] = "Bearer " + jeton
+        kw["req_headers"] = h
         if corps is not None:
             kw["req_body"] = json.dumps(corps)
-            kw["req_headers"] = {"Content-Type": "application/json", "Accept": "application/json"}
         UrlRequest(self.url_api(chemin), **kw)
 
     def _ping_reseau(self, dt):
@@ -406,7 +473,7 @@ class FonctionsEnLigne:
     def synchroniser_profil(self, force=False):
         """Envoie le profil au serveur (uniquement si connecté ET consentement donné)."""
         if not getattr(self, "en_ligne", False) or getattr(self, "consentement", None) is not True \
-                or not getattr(self, "identifiant_joueur", ""):
+                or not getattr(self, "identifiant_joueur", "") or not getattr(self, "jeton_compte", ""):
             return
         if not force and time.time() - getattr(self, "_derniere_sync", 0) < 12:
             return
@@ -423,7 +490,20 @@ class FonctionsEnLigne:
             "stats_chapitres": {k: v for k, v in st.items() if v and v[1] > 0},
             "bonnes": bonnes, "total": total, "consentement": True,
         }
-        self.api("/api/sauvegarde", corps, timeout=6)
+        self.api("/api/sauvegarde", corps, timeout=6, ok=self._profil_accepte)
+
+    def _profil_accepte(self, r):
+        """Le serveur plafonne les gains impossibles : le téléphone s'aligne sur la valeur acceptée."""
+        try:
+            if r.get("points_rang_accepte") is not None and r["points_rang_accepte"] < self.points_de_rang:
+                self.points_de_rang = r["points_rang_accepte"]
+            if r.get("xp_accepte") is not None and r["xp_accepte"] < self.xp:
+                self.xp = r["xp_accepte"]
+            if r.get("niveau_profil_accepte") is not None and r["niveau_profil_accepte"] < self.niveau_profil:
+                self.niveau_profil = r["niveau_profil_accepte"]
+            self.sauvegarder_donnees_locales()
+        except Exception as ex:
+            print("alignement profil :", ex)
 
     def supprimer_mes_donnees_en_ligne(self):
         if not self.en_ligne:
@@ -462,11 +542,13 @@ class FonctionsEnLigne:
         self.question_label.text = texte
 
     def _fixer_hauteur(self, minimum=500):
+        if getattr(self, "_mode_question", False):
+            return
         lay = self.interaction_layout
         total = sum(c.height for c in lay.children) + lay.spacing * max(0, len(lay.children) - 1) + dp(16)
         lay.height = max(total, dp(minimum) if minimum else 0)
 
-    def _retour_accueil_btn(self, texte="← Revenir à l'Accueil", cb=None):
+    def _retour_accueil_btn(self, texte="« Revenir à l'Accueil", cb=None):
         return bouton(texte, ROUGE, cb or (lambda: self.afficher_menu_principal_modes()), neon=ROUGE)
 
     # ------------------------------------------------------------ hub multijoueur
@@ -572,11 +654,11 @@ class FonctionsEnLigne:
                 f"Points forts : {forts}\nÀ travailler : {faibles}\n"
                 f"Dernière connexion : {p.get('derniere_connexion', '—')}", taille="15sp", markup=True, align="left"))
             L.add_widget(bouton("Copier cet identifiant", PANEL2, lambda: (Clipboard.copy(p.get("identifiant", "")), self.toast("Copié ✔")), h=46))
-            L.add_widget(bouton("← Retour aux joueurs", ROUGE, lambda: self.afficher_module_joueurs(None), neon=ROUGE))
+            L.add_widget(bouton("« Retour aux joueurs", ROUGE, lambda: self.afficher_module_joueurs(None), neon=ROUGE))
             self._fixer_hauteur()
         self.api("/api/joueur/" + str(ident), ok=affiche,
                  err=lambda m: setattr(self.question_label, "text", "Joueur introuvable"))
-        L.add_widget(bouton("← Retour", ROUGE, lambda: self.afficher_module_joueurs(None), neon=ROUGE))
+        L.add_widget(bouton("« Retour", ROUGE, lambda: self.afficher_module_joueurs(None), neon=ROUGE))
         self._fixer_hauteur()
 
     # ------------------------------------------------------------ réglage serveur
@@ -678,7 +760,7 @@ class FonctionsEnLigne:
                      ok=lambda r: self._salon_demarrer(r["code_pin"], "hote", type_, r.get("config", cfg)),
                      err=lambda m: self.toast("Création impossible : " + str(m)))
         L.add_widget(bouton("Créer la salle", VERT, creer, h=54, neon=VERT))
-        L.add_widget(self._retour_accueil_btn("← Retour", lambda: self.afficher_hub_multijoueur()))
+        L.add_widget(self._retour_accueil_btn("« Retour", lambda: self.afficher_hub_multijoueur()))
         maj_classes()
         rebuild_chapitres()
 
@@ -701,7 +783,7 @@ class FonctionsEnLigne:
                      ok=lambda r: self._salon_demarrer(code, "joueur", r.get("type", type_), r.get("config", {}), r.get("hote", "")),
                      err=lambda m: self.toast("Impossible : " + str(m)))
         L.add_widget(bouton("Rejoindre", VERT, go, h=54, neon=VERT))
-        L.add_widget(self._retour_accueil_btn("← Retour", lambda: self.afficher_hub_multijoueur()))
+        L.add_widget(self._retour_accueil_btn("« Retour", lambda: self.afficher_hub_multijoueur()))
         self._fixer_hauteur()
 
     # ------------------------------------------------------------- cycle d'une salle
@@ -796,26 +878,22 @@ class FonctionsEnLigne:
         self.scroll_interaction.size_hint_y = 1
         L = self.interaction_layout
         s["widgets"] = {}
-        web = AndroidMathWebView(size_hint=(1, None), height=dp(300 if not joue else 240))
+        web = AndroidMathWebView(size_hint=(1, None), height=dp(430 if joue else 300))
         web.set_question({"enonce": q["enonce"], "options": q["options"], "explication": ""},
-                         titre_tete=f"Salle {s['code']} · Q{res['index_q'] + 1}/{res['nb_questions']}", avec_explication=False)
+                         titre_tete=f"Salle {s['code']} · Q{res['index_q'] + 1}/{res['nb_questions']}", avec_explication=False,
+                         cliquable=bool(joue) and not s["a_repondu"], on_choix=self._salon_repondre)
         L.add_widget(web)
         s["widgets"]["web"] = web
         s["widgets"]["statut"] = etiquette("", h=34, taille="14sp", couleur=CYAN)
         L.add_widget(s["widgets"]["statut"])
-        s["widgets"]["boutons"] = []
-        if joue:
-            for i, o in enumerate(q["options"]):
-                b = bouton(f"{LETTRES[i]}   {latex_vers_texte(o)}", PANEL2, lambda i=i: self._salon_repondre(i), h=50, font="16sp")
-                s["widgets"]["boutons"].append(b)
-                L.add_widget(b)
-            if s["a_repondu"]:
-                self._verrouiller_boutons()
+        s["widgets"]["boutons"] = []             # les propositions sont dans la page (rendu mathématique + clic)
+        if joue and s["a_repondu"]:
+            web.verrouiller()
         if hote:
             s["widgets"]["liste"] = etiquette("", taille="13sp", align="left")
             L.add_widget(s["widgets"]["liste"])
             ligne = BoxLayout(size_hint=(1, None), height=dp(50), spacing=dp(6))
-            ligne.add_widget(bouton("Question suivante ➜", VERT, lambda: self._salon_action("suivante"), h=50, font="14sp", neon=VERT))
+            ligne.add_widget(bouton("Question suivante »", VERT, lambda: self._salon_action("suivante"), h=50, font="14sp", neon=VERT))
             ligne.add_widget(bouton("Voir les réponses", PANEL2, self.afficher_details_reponses, h=50, font="14sp", neon=AMBRE))
             L.add_widget(ligne)
             L.add_widget(bouton("Terminer la session", ROUGE, lambda: self._salon_action("terminer"), h=46, neon=ROUGE))
@@ -825,6 +903,9 @@ class FonctionsEnLigne:
         SoundManager.play("notif")
 
     def _verrouiller_boutons(self, choisi=None):
+        web = self.salon["widgets"].get("web")
+        if web:
+            web.verrouiller()
         for i, b in enumerate(self.salon["widgets"].get("boutons", [])):
             b.disabled = True
             if choisi is not None and i == choisi:
