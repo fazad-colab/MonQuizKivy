@@ -2,21 +2,15 @@
 """
 android_math_webview.py — rendu mathématique KaTeX dans une WebView Android (ou aperçu texte sur PC)
 
- * KaTeX est chargé depuis le dossier LOCAL  ./katex  (à la racine du projet, à côté de main.py) :
-       katex/katex.min.css   katex/katex.min.js   katex/contrib/auto-render.min.js   katex/fonts/*
-   -> fonctionne hors connexion. Si le dossier est absent/incomplet : repli automatique sur le CDN.
- * Thème « dark web » : fond noir violacé, néons cyan / magenta / vert, cartes en verre, police mono.
- * La correction (bonne/mauvaise réponse + explication LaTeX) s'affiche DANS la page :
-   une vue native Android passe toujours AU-DESSUS de Kivy, donc un Popup Kivy serait caché derrière.
- * Les PROPOSITIONS sont des éléments de la page (rendu KaTeX) et sont CLIQUABLES : le clic est lu par
-   Python (interrogation de window.__mq_choix) puis transmis au callback `on_choix(index)`.
- * La vue native suit en permanence son widget Kivy (position fenêtre, découpée par les ScrollView parents,
-   masquée si un parent est invisible) : elle ne « flotte » plus en haut de l'écran.
+ * KaTeX est chargé depuis le dossier LOCAL ./katex (ou ./Katex : la casse est détectée automatiquement).
+ * Thème « dark web » : fond noir violacé, néons cyan / magenta / vert.
+ * Si KaTeX local est absent ET pas de connexion : un avertissement visible s'affiche.
 """
 import os
 import weakref
 from html import escape
 
+from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.metrics import dp
@@ -36,26 +30,65 @@ else:
         return func
 
 DOSSIER_APP = os.path.dirname(os.path.abspath(__file__))
-DOSSIER_KATEX = os.path.join(DOSSIER_APP, "katex")
 LETTRES = "ABCDEFGH"
 CDN = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist"
 
 
+# ---------------------------------------------------------------------------
+# Détection FLEXIBLE du dossier KaTeX : accepte katex / Katex / KATEX / KaTeX
+# (sur Android le FS est sensible à la casse : c'était la cause du rendu cassé)
+# ---------------------------------------------------------------------------
+def _trouver_dossier_katex():
+    for nom in ("katex", "Katex", "KATEX", "KaTeX"):
+        chemin = os.path.join(DOSSIER_APP, nom)
+        if all(os.path.exists(os.path.join(chemin, *p)) for p in
+               (("katex.min.js",), ("katex.min.css",), ("contrib", "auto-render.min.js"))):
+            return nom
+    return None
+
+
+KATEX_DIR_NOM = _trouver_dossier_katex()          # ex. "katex" ou None
+DOSSIER_KATEX = os.path.join(DOSSIER_APP, KATEX_DIR_NOM) if KATEX_DIR_NOM else None
+
+
 def katex_local_disponible():
-    return all(os.path.exists(os.path.join(DOSSIER_KATEX, *p)) for p in
-               (("katex.min.js",), ("katex.min.css",), ("contrib", "auto-render.min.js")))
+    return KATEX_DIR_NOM is not None
 
 
 def _html(txt):
-    """Échappe le HTML mais conserve $...$ et \\ ; les retours à la ligne deviennent <br>."""
-    return escape(str(txt or ""), quote=False).replace("\n", "<br>")
+    """Échappe le HTML mais conserve $...$ ; les \\n DANS les $...$ deviennent des espaces,
+    les \\n HORS des $...$ deviennent <br>. (Sinon une formule multi-ligne casse le rendu KaTeX.)"""
+    txt = str(txt or "")
+    if "$" not in txt:
+        return escape(txt, quote=False).replace("\n", "<br>")
+    parts, i = [], 0
+    while i < len(txt):
+        j = txt.find("$", i)
+        if j == -1:
+            parts.append(("prose", txt[i:]))
+            break
+        if j > i:
+            parts.append(("prose", txt[i:j]))
+        k = txt.find("$", j + 1)
+        if k == -1:
+            parts.append(("math", txt[j:]))
+            break
+        parts.append(("math", txt[j:k + 1]))
+        i = k + 1
+    out = []
+    for typ, seg in parts:
+        if typ == "math":
+            out.append(escape(seg.replace("\n", " "), quote=False))
+        else:
+            out.append(escape(seg, quote=False).replace("\n", "<br>"))
+    return "".join(out)
 
 
 CSS = """
 :root{--bg:#05050a;--card:rgba(18,16,36,.78);--bord:rgba(0,240,255,.28);--cy:#00f0ff;--mg:#ff2bd6;--ok:#39ff88;--ko:#ff3b5c;--tx:#e9eaff;--mut:#8a8fb8}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%%;margin:0;background:var(--bg);color:var(--tx);font-family:ui-monospace,"JetBrains Mono","Roboto Mono",Menlo,Consolas,monospace}
-body{padding:10px 10px 18px;font-size:%(fs)spx;line-height:1.55;display:flex;flex-direction:column;min-height:100%%;
+body{padding:10px 10px 18px;font-size:calc(var(--z,1)*%(fs)spx);line-height:1.55;display:flex;flex-direction:column;min-height:100%%;
  background-image:linear-gradient(rgba(0,240,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(0,240,255,.045) 1px,transparent 1px);
  background-size:26px 26px}
 .tete{display:flex;justify-content:space-between;align-items:center;font-size:.72em;letter-spacing:.14em;color:var(--cy);text-transform:uppercase;margin:0 2px 8px}
@@ -66,7 +99,7 @@ body{padding:10px 10px 18px;font-size:%(fs)spx;line-height:1.55;display:flex;fle
 .etiq{font-size:.68em;letter-spacing:.2em;color:var(--mg);margin-bottom:6px;text-transform:uppercase}
 .etiq::before{content:"> ";color:var(--cy)}
 .props{flex:1 1 auto;display:flex;flex-direction:column}
-.opt{flex:1 1 auto;min-height:52px;cursor:pointer;-webkit-user-select:none;user-select:none;display:flex;gap:10px;align-items:center;padding:11px 12px;margin:8px 0;border-radius:12px;border:1px solid rgba(255,255,255,.12);
+.opt{flex:1 0 auto;min-height:52px;touch-action:manipulation;cursor:pointer;-webkit-user-select:none;user-select:none;display:flex;gap:10px;align-items:center;padding:11px 12px;margin:8px 0;border-radius:12px;border:1px solid rgba(255,255,255,.12);
  background:rgba(255,255,255,.035);transition:all .18s ease;font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
 .opt .lt{flex:0 0 30px;height:30px;border-radius:9px;display:grid;place-items:center;font-family:ui-monospace,monospace;font-weight:700;
  color:var(--cy);border:1px solid var(--cy);box-shadow:0 0 10px rgba(0,240,255,.35)}
@@ -88,16 +121,42 @@ body:not(.cliq) .opt{cursor:default}
 .carte.ok-c{border-color:rgba(57,255,136,.55)}.carte.ko-c{border-color:rgba(255,59,92,.55)}
 .corps{overflow-x:auto;font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
 .katex{font-size:1.06em;color:#fff}.katex-display{overflow-x:auto;overflow-y:hidden}
+#mq-avert{display:none;color:#ffb800;padding:12px;border:1px solid #ffb800;border-radius:10px;margin-top:12px;font-size:.85em;line-height:1.5}
+.tete{flex:none}.etiq{flex:none}
+.carte.moi{border-color:rgba(255,43,214,.5)}.carte.ia{border-color:rgba(0,240,255,.5)}
+/* height:100%% (fiable sur toutes WebViews) au lieu de 100vh */
+body.q{height:100%%;min-height:0;overflow:hidden}
+body.q #cEnonce{flex:0 1 auto;min-height:0;overflow-y:auto}
+body.q .props{flex:1 1 auto;min-height:0;overflow-y:auto;margin-bottom:6px}
+body.q .verdict,body.q .envoye{flex:none}
+body.q.rev{height:auto;min-height:100%%;overflow-y:auto}
+body.q.rev #cEnonce,body.q.rev .props{flex:none;overflow:visible}
 @keyframes pop{from{transform:scale(.97);opacity:.4}to{transform:none;opacity:1}}
 .carte{animation:pop .22s ease-out}
 """
 
 JS = """
 function mqRendre(){
-  if(typeof renderMathInElement==='undefined'){return;}
-  renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},
-    {left:'\\\\(',right:'\\\\)',display:false},{left:'\\\\[',right:'\\\\]',display:true}],throwOnError:false,strict:false});
+  if(typeof renderMathInElement!=='undefined'){
+    renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},
+      {left:'\\\\(',right:'\\\\)',display:false},{left:'\\\\[',right:'\\\\]',display:true}],throwOnError:false,strict:false});
+  }
+  mqAjuster();
+  if(document.body.getAttribute('data-bas')){window.scrollTo(0,document.body.scrollHeight);}
 }
+function mqAjuster(){
+  var b=document.body;if(!b||!b.classList.contains('q')||b.classList.contains('rev')){return;}
+  var e=document.getElementById('cEnonce'),p=document.querySelector('.props');if(!e||!p){return;}
+  // réduction douce : jamais en dessous de 0.85 (au-delà, on laisse scroller)
+  var z=1;b.style.setProperty('--z','1');
+  for(var i=0;i<6;i++){
+    var trop=(e.scrollHeight>e.clientHeight+2)||(p.scrollHeight>p.clientHeight+2);
+    if(!trop||z<=0.85){break;}
+    z=Math.round((z-0.03)*100)/100;b.style.setProperty('--z',String(z));
+  }
+}
+window.addEventListener('resize',function(){mqAjuster();});
+window.addEventListener('load',function(){setTimeout(mqAjuster,60);setTimeout(mqAjuster,400);});
 window.__mq_choix=-1;
 document.addEventListener('click',function(e){
   var o=e.target&&e.target.closest?e.target.closest('.opt'):null;
@@ -107,18 +166,28 @@ document.addEventListener('click',function(e){
   document.querySelectorAll('.opt').forEach(function(x,k){x.classList.toggle('sel',k===i);});
 });
 function mqVerrouiller(){document.body.classList.add('lock');}
-function mqCharger(src,cb){var s=document.createElement('script');s.src=src;s.onload=cb;document.head.appendChild(s);}
+function mqCharger(src,cb,err){
+  var s=document.createElement('script');s.src=src;s.async=true;
+  s.onload=cb;
+  s.onerror=function(){if(err){err();}else{console.warn('mq: chargement impossible '+src);}};
+  document.head.appendChild(s);
+}
 function mqDemarrer(){
-  if(typeof katex==='undefined'||typeof renderMathInElement==='undefined'){
-    // repli CDN : KaTeX local absent ou incomplet
-    var l=document.createElement('link');l.rel='stylesheet';l.href='%(cdn)s/katex.min.css';document.head.appendChild(l);
-    mqCharger('%(cdn)s/katex.min.js',function(){mqCharger('%(cdn)s/contrib/auto-render.min.js',mqRendre);});
-  } else {mqRendre();}
+  if(typeof katex!=='undefined'&&typeof renderMathInElement!=='undefined'){mqRendre();return;}
+  var avert=document.getElementById('mq-avert');
+  var fini=false;
+  var minuteur=setTimeout(function(){if(!fini&&avert){avert.style.display='block';}},5000);
+  var l=document.createElement('link');l.rel='stylesheet';l.href='%(cdn)s/katex.min.css';document.head.appendChild(l);
+  mqCharger('%(cdn)s/katex.min.js',function(){
+    mqCharger('%(cdn)s/contrib/auto-render.min.js',function(){
+      fini=true;clearTimeout(minuteur);mqRendre();
+    },function(){fini=true;clearTimeout(minuteur);if(avert){avert.style.display='block';}});
+  },function(){fini=true;clearTimeout(minuteur);if(avert){avert.style.display='block';}});
 }
 function mqMarquer(i){document.querySelectorAll('.opt').forEach(function(o,k){o.classList.toggle('sel',k===i);});
   var e=document.getElementById('envoye');if(e){e.style.display='block';}}
 function mqReveler(choisi,correct){
-  document.body.classList.add('lock');
+  document.body.classList.add('lock');document.body.classList.add('rev');
   document.querySelectorAll('.opt').forEach(function(o,k){o.classList.remove('sel');
     if(k===correct){o.classList.add('bon');} else if(k===choisi){o.classList.add('mauv');}});
   var v=document.getElementById('verdict');
@@ -129,18 +198,35 @@ function mqReveler(choisi,correct){
   var x=document.getElementById('expl');if(x){x.style.display='block';}
   if(v){v.scrollIntoView({behavior:'smooth',block:'start'});}
 }
-document.addEventListener('DOMContentLoaded',function(){setTimeout(mqDemarrer,30);});
+(function(){
+  var go=function(){setTimeout(mqDemarrer,30);};
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',go);}else{go();}
+})();
 """
+
+
+def _head_katex():
+    """Retourne les balises <link>/<script> de KaTeX (chemin = nom réel du dossier détecté)."""
+    if not KATEX_DIR_NOM:
+        return ""
+    return (
+        f'<link rel="stylesheet" href="{KATEX_DIR_NOM}/katex.min.css">'
+        f'<script src="{KATEX_DIR_NOM}/katex.min.js"></script>'
+        f'<script src="{KATEX_DIR_NOM}/contrib/auto-render.min.js"></script>'
+    )
+
+
+AVERT_HTML = (
+    '<div id="mq-avert">'
+    "⚠ Les formules mathématiques ne peuvent pas s'afficher : KaTeX n'est pas installé et la connexion Internet est indisponible."
+    " Vérifie que le dossier <code>katex/</code> est bien présent à la racine de l'application."
+    "</div>"
+)
 
 
 def generer_page(q, titre_tete="", points="", avec_explication=True, taille_police=16, cliquable=False):
     """Construit la page HTML complète pour un dict question (voir moteur_quiz.generer_question)."""
-    local = katex_local_disponible()
-    head_katex = (
-        '<link rel="stylesheet" href="katex/katex.min.css">'
-        '<script src="katex/katex.min.js"></script>'
-        '<script src="katex/contrib/auto-render.min.js"></script>'
-    ) if local else ""
+    head_katex = _head_katex()
     opts = ""
     for i, o in enumerate(q.get("options", [])):
         opts += f'<div class="opt" id="o{i}" data-i="{i}"><div class="lt">{LETTRES[i]}</div><div class="tx">{_html(o)}</div></div>'
@@ -149,31 +235,26 @@ def generer_page(q, titre_tete="", points="", avec_explication=True, taille_poli
         expl = f'<div class="carte" id="expl"><div class="etiq">Démonstration</div><div>{_html(q["explication"])}</div></div>'
     return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-{head_katex}<style>{CSS % {"fs": taille_police}}</style><script>{JS % {"cdn": CDN}}</script></head><body class="{'cliq' if cliquable else ''}">
+{head_katex}<style>{CSS % {"fs": taille_police}}</style><script>{JS % {"cdn": CDN}}</script></head><body class="q {'cliq' if cliquable else ''}">
 <div class="tete"><span>{_html(titre_tete)}</span><span class="pt">{_html(points)}</span></div>
-<div class="carte"><div class="etiq">Énoncé</div><div class="enonce">{_html(q.get("enonce", ""))}</div></div>
+<div class="carte" id="cEnonce"><div class="etiq">Énoncé</div><div class="enonce">{_html(q.get("enonce", ""))}</div></div>
 <div class="carte props"><div class="etiq">Propositions</div>{opts}</div>
 <div class="envoye" id="envoye">&gt; RÉPONSE ENVOYÉE — EN ATTENTE DES AUTRES…</div>
-<div class="verdict" id="verdict"></div>{expl}
+<div class="verdict" id="verdict"></div>{expl}{AVERT_HTML}
 </body></html>"""
 
 
-def generer_page_document(titre, cartes, taille_police=16):
-    """Page de lecture avec rendu mathématique. cartes = [(étiquette, texte_avec_$maths$, style)], style ∈ '', 'ok', 'ko'."""
-    local = katex_local_disponible()
-    head_katex = (
-        '<link rel="stylesheet" href="katex/katex.min.css">'
-        '<script src="katex/katex.min.js"></script>'
-        '<script src="katex/contrib/auto-render.min.js"></script>'
-    ) if local else ""
+def generer_page_document(titre, cartes, taille_police=16, defiler_bas=False):
+    """Page de lecture avec rendu mathématique. cartes = [(étiquette, texte_avec_$maths$, style)]."""
+    head_katex = _head_katex()
     corps = ""
     for etiq, texte, style in cartes:
-        cl = {"ok": " ok-c", "ko": " ko-c"}.get(style, "")
+        cl = {"ok": " ok-c", "ko": " ko-c", "moi": " moi", "ia": " ia"}.get(style, "")
         corps += f'<div class="carte{cl}"><div class="etiq">{_html(etiq)}</div><div class="corps">{_html(texte)}</div></div>'
     return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-{head_katex}<style>{CSS % {"fs": taille_police}}</style><script>{JS % {"cdn": CDN}}</script></head><body>
-<div class="tete"><span>{_html(titre)}</span></div>{corps}</body></html>"""
+{head_katex}<style>{CSS % {"fs": taille_police}}</style><script>{JS % {"cdn": CDN}}</script></head><body{' data-bas="1"' if defiler_bas else ''}>
+<div class="tete"><span>{_html(titre)}</span></div>{corps}{AVERT_HTML}</body></html>"""
 
 
 class AndroidMathWebView(Widget):
@@ -182,6 +263,7 @@ class AndroidMathWebView(Widget):
     _instances = weakref.WeakSet()
 
     def __init__(self, html="", **kwargs):
+        self.sous_entete = kwargs.pop("sous_entete", True)
         super().__init__(**kwargs)
         self.html = html
         self._native_view = None
@@ -213,7 +295,6 @@ class AndroidMathWebView(Widget):
 
     # ------------------------------------------------------------------ API
     def set_question(self, q, titre_tete="", points="", avec_explication=True, cliquable=False, on_choix=None):
-        """Affiche une question (dict du moteur). Si cliquable, `on_choix(index)` est appelé au clic sur une proposition."""
         self._derniere_question = (q, avec_explication)
         self._verrouille = False
         self._on_choix = on_choix if cliquable else None
@@ -223,7 +304,8 @@ class AndroidMathWebView(Widget):
                 self._charger_html()
                 self._demarrer_poll()
         else:
-            lignes = [f"[b][color=00f0ff]{titre_tete}[/color][/b]   [color=ff2bd6]{points}[/color]", "", q.get("enonce_txt") or latex_vers_texte(q.get("enonce", "")), ""]
+            lignes = [f"[b][color=00f0ff]{titre_tete}[/color][/b]   [color=ff2bd6]{points}[/color]", "",
+                      q.get("enonce_txt") or latex_vers_texte(q.get("enonce", "")), ""]
             textes = q.get("options_txt") or [latex_vers_texte(x) for x in q.get("options", [])]
             self._fallback_opts.clear_widgets()
             if self._on_choix:
@@ -238,10 +320,9 @@ class AndroidMathWebView(Widget):
                     lignes.append(f"[b]{LETTRES[i]}[/b]  {o}")
             self._fallback.text = "\n".join(lignes)
 
-    def set_document(self, titre, cartes):
-        """Page de lecture (bilan d'examen, corrections) avec rendu mathématique."""
+    def set_document(self, titre, cartes, defiler_bas=False):
         self._on_choix = None
-        self.html = generer_page_document(titre, cartes)
+        self.html = generer_page_document(titre, cartes, defiler_bas=defiler_bas)
         if platform == "android":
             if self._native_view is not None:
                 self._charger_html()
@@ -254,16 +335,13 @@ class AndroidMathWebView(Widget):
             self._fallback.text = "\n".join(lignes)
 
     def set_content(self, enonce, options=None, bonne_reponse="", explication=""):
-        """Compatibilité avec l'ancienne API."""
         q = {"enonce": enonce, "options": options or [], "explication": explication, "bonne_reponse": bonne_reponse}
         self.set_question(q)
 
     def marquer(self, index):
-        """Élève : met en évidence l'option choisie (sans dire si elle est juste)."""
         self._js(f"mqMarquer({int(index)})")
 
     def verrouiller(self):
-        """Empêche tout nouveau clic sur les propositions."""
         self._verrouille = True
         self._js("mqVerrouiller()")
         if platform != "android" and hasattr(self, "_fallback_opts"):
@@ -271,7 +349,6 @@ class AndroidMathWebView(Widget):
                 b.disabled = True
 
     def reveler(self, choisi, correct):
-        """Montre vert/rouge + explication."""
         self._verrouille = True
         self._js(f"mqReveler({int(choisi)},{int(correct)})")
         if platform != "android" and self._derniere_question:
@@ -281,9 +358,8 @@ class AndroidMathWebView(Widget):
             self._fallback.text += f"\n\n[b]{'Bonne réponse' if choisi == correct else 'Faux'}[/b] — {LETTRES[correct]}\n{q.get('explication_txt', '')}"
 
     def set_visible(self, visible):
-        """Cache/affiche la vue native (indispensable avant d'ouvrir un Popup Kivy)."""
         self._visible = visible
-        self._dernier_layout = None            # force la réapplication au prochain passage
+        self._dernier_layout = None
         if platform != "android" and hasattr(self, "_fallback_box"):
             self._fallback_box.opacity = 1 if visible else 0
 
@@ -331,7 +407,8 @@ class AndroidMathWebView(Widget):
 
     def _valeur_recue(self, valeur):
         try:
-            i = int(str(valeur).strip().strip('"'))
+            brut = valeur.toString() if hasattr(valeur, "toString") else valeur
+            i = int(str(brut).strip().strip('"'))
         except Exception:
             return
         if i >= 0:
@@ -410,13 +487,12 @@ class AndroidMathWebView(Widget):
                 webview.setWebViewClient(WebViewClient())
                 webview.setBackgroundColor(Color.parseColor("#05050A"))
                 webview.setVerticalScrollBarEnabled(False)
-                webview.setVisibility(4)            # invisible tant que la position n'est pas calculée
+                webview.setVisibility(4)
 
                 st = webview.getSettings()
                 st.setJavaScriptEnabled(True)
                 st.setDomStorageEnabled(True)
                 st.setLoadsImagesAutomatically(True)
-                # KaTeX local : accès aux fichiers de l'application (css, js, polices)
                 st.setAllowFileAccess(True)
                 st.setAllowFileAccessFromFileURLs(True)
                 st.setAllowUniversalAccessFromFileURLs(True)
@@ -425,7 +501,11 @@ class AndroidMathWebView(Widget):
 
                 params = FrameLayoutParams(1, 1)
                 params.gravity = Gravity.TOP | Gravity.LEFT
-                activity.addContentView(webview, params)
+                try:
+                    conteneur = PythonActivity.mLayout
+                    conteneur.addView(webview, params)
+                except Exception:
+                    activity.addContentView(webview, params)
 
                 self._native_view = webview
                 self._charger_html()
@@ -468,8 +548,6 @@ class AndroidMathWebView(Widget):
 
     # ------------------------------------------------ position de la vue native
     def _zone_visible(self):
-        """Rectangle (gauche, bas, droite, haut) en coordonnées fenêtre Kivy, découpé par les ScrollView parents.
-        Retourne None si le widget ne doit pas être visible."""
         if not self._visible or self.get_root_window() is None:
             return None
         x, y = self.to_window(self.x, self.y)
@@ -485,6 +563,15 @@ class AndroidMathWebView(Widget):
                 g, b = max(g, px), max(b, py)
                 d, h = min(d, px + p.width), min(h, py + p.height)
             p = p.parent
+        if self.sous_entete:
+            try:
+                app = App.get_running_app()
+                en_tete = getattr(app, "info_layout", None)
+                if en_tete is not None and en_tete.get_root_window() is not None:
+                    _, ey = en_tete.to_window(en_tete.x, en_tete.y)
+                    h = min(h, ey - dp(4))
+            except Exception:
+                pass
         if d - g < 2 or h - b < 2:
             return None
         return g, b, d, h
@@ -513,7 +600,9 @@ class AndroidMathWebView(Widget):
                     params.height = max(1, hh)
                     params.setMargins(x, max(0, top), 0, 0)
                     webview.setLayoutParams(params)
-                webview.setVisibility(0 if visible else 4)       # VISIBLE / INVISIBLE
+                    webview.requestLayout()          # ← indispensable sur certains Android
+                    webview.invalidate()
+                webview.setVisibility(0 if visible else 4)
             except Exception as e:
                 print(f"[AndroidMathWebView] Erreur layout: {e}")
         appliquer()
