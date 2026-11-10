@@ -6,7 +6,9 @@ android_math_webview.py — rendu mathématique KaTeX dans une WebView Android (
  * Thème « dark web » : fond noir violacé, néons cyan / magenta / vert.
  * Si KaTeX local est absent ET pas de connexion : un avertissement visible s'affiche.
 """
+import json
 import os
+import re
 import weakref
 from html import escape
 
@@ -23,13 +25,106 @@ from kivy.utils import platform
 
 from latex_utils import latex_vers_texte
 
+DOSSIER_APP = os.path.dirname(os.path.abspath(__file__))
+FICHIER_DIAG = os.path.join(DOSSIER_APP, "diag_webview.txt")
+_REFS_UI = []          # garde les Runnable Java vivants le temps de leur exécution
+
+
+def _diag(msg):
+    """Trace visible : console + fichier diag_webview.txt (dossier de l'appli)."""
+    print(f"[AndroidMathWebView] {msg}")
+    try:
+        with open(FICHIER_DIAG, "a", encoding="utf-8") as f:
+            f.write(msg + "\n")
+    except Exception:
+        pass
+
+
+def _resoudre_activite():
+    """(activité, conteneur|None) : essaie PythonActivity (p4a / Buildozer) puis SDLActivity (Pydroid3)."""
+    from jnius import autoclass
+    erreurs = []
+    for nom in ("org.kivy.android.PythonActivity", "org.libsdl.app.SDLActivity"):
+        try:
+            cls = autoclass(nom)
+        except Exception as e:
+            erreurs.append(f"{nom}: classe absente")
+            continue
+        act = None
+        for champ in ("mActivity", "mSingleton"):
+            try:
+                act = getattr(cls, champ)
+            except Exception:
+                act = None
+            if act is not None:
+                break
+        if act is None:
+            try:
+                act = cls.getContext()
+            except Exception:
+                act = None
+        if act is None:
+            erreurs.append(f"{nom}: activité nulle")
+            continue
+        cont = None
+        try:
+            cont = cls.mLayout
+        except Exception:
+            cont = None
+        if cont is None:
+            try:
+                cont = cls.getContentView()
+            except Exception:
+                cont = None
+        return act, cont
+    raise RuntimeError(" | ".join(erreurs) or "aucune activité Android trouvée")
+
+
+def _executer_sur_ui_secours(func):
+    def wrapper(*a, **k):
+        from jnius import PythonJavaClass, java_method
+        act = _resoudre_activite()[0]
+
+        class _Tache(PythonJavaClass):
+            __javainterfaces__ = ["java/lang/Runnable"]
+            __javacontext__ = "app"
+
+            @java_method("()V")
+            def run(self):
+                try:
+                    func(*a, **k)
+                except Exception as e:
+                    _diag(f"tâche UI: {e}")
+        t = _Tache()
+        _REFS_UI.append(t)
+        del _REFS_UI[:-30]
+        act.runOnUiThread(t)
+    return wrapper
+
+
 if platform == "android":
-    from android.runnable import run_on_ui_thread
+    try:
+        from android.runnable import run_on_ui_thread as _run_ui_p4a
+    except Exception:
+        _run_ui_p4a = None
+
+    def run_on_ui_thread(func):
+        """Exécute sur le thread UI Android : outil p4a si possible, sinon runOnUiThread (Pydroid3)."""
+        orig = _run_ui_p4a(func) if _run_ui_p4a else None
+        secours = _executer_sur_ui_secours(func)
+
+        def w(*a, **k):
+            if orig is not None:
+                try:
+                    return orig(*a, **k)
+                except Exception as e:
+                    _diag(f"android.runnable indisponible ({e}) → runOnUiThread")
+            return secours(*a, **k)
+        return w
 else:
     def run_on_ui_thread(func):
         return func
 
-DOSSIER_APP = os.path.dirname(os.path.abspath(__file__))
 LETTRES = "ABCDEFGH"
 CDN = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist"
 
@@ -99,7 +194,7 @@ body{padding:10px 10px 18px;font-size:calc(var(--z,1)*%(fs)spx);line-height:1.55
 .etiq{font-size:.68em;letter-spacing:.2em;color:var(--mg);margin-bottom:6px;text-transform:uppercase}
 .etiq::before{content:"> ";color:var(--cy)}
 .props{flex:1 1 auto;display:flex;flex-direction:column}
-.opt{flex:1 0 auto;min-height:52px;touch-action:manipulation;cursor:pointer;-webkit-user-select:none;user-select:none;display:flex;gap:10px;align-items:center;padding:11px 12px;margin:8px 0;border-radius:12px;border:1px solid rgba(255,255,255,.12);
+.opt{flex:1 0 auto;min-height:calc(var(--z,1)*50px);touch-action:manipulation;cursor:pointer;-webkit-user-select:none;user-select:none;display:flex;gap:10px;align-items:center;padding:calc(var(--z,1)*9px) 12px;margin:calc(var(--z,1)*6px) 0;border-radius:12px;border:1px solid rgba(255,255,255,.12);
  background:rgba(255,255,255,.035);transition:all .18s ease;font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
 .opt .lt{flex:0 0 30px;height:30px;border-radius:9px;display:grid;place-items:center;font-family:ui-monospace,monospace;font-weight:700;
  color:var(--cy);border:1px solid var(--cy);box-shadow:0 0 10px rgba(0,240,255,.35)}
@@ -121,16 +216,17 @@ body:not(.cliq) .opt{cursor:default}
 .carte.ok-c{border-color:rgba(57,255,136,.55)}.carte.ko-c{border-color:rgba(255,59,92,.55)}
 .corps{overflow-x:auto;font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
 .katex{font-size:1.06em;color:#fff}.katex-display{overflow-x:auto;overflow-y:hidden}
-#mq-avert{display:none;color:#ffb800;padding:12px;border:1px solid #ffb800;border-radius:10px;margin-top:12px;font-size:.85em;line-height:1.5}
+#mq-avert{display:none;position:fixed;left:10px;right:10px;bottom:10px;z-index:9;background:rgba(5,5,10,.94);color:#ffb800;padding:10px;border:1px solid #ffb800;border-radius:10px;font-size:.8em;line-height:1.4}
 .tete{flex:none}.etiq{flex:none}
 .carte.moi{border-color:rgba(255,43,214,.5)}.carte.ia{border-color:rgba(0,240,255,.5)}
-/* height:100%% (fiable sur toutes WebViews) au lieu de 100vh */
+/* Mode question : la hauteur disponible est répartie AUTOMATIQUEMENT entre énoncé et propositions (voir mqAjuster) */
 body.q{height:100%%;min-height:0;overflow:hidden}
-body.q #cEnonce{flex:0 1 auto;min-height:0;overflow-y:auto}
-body.q .props{flex:1 1 auto;min-height:0;overflow-y:auto;margin-bottom:6px}
+body.q #cEnonce,body.q .props{min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+body.q #cEnonce{flex:0 0 auto}
+body.q .props{flex:1 1 auto;margin-bottom:6px}
 body.q .verdict,body.q .envoye{flex:none}
 body.q.rev{height:auto;min-height:100%%;overflow-y:auto}
-body.q.rev #cEnonce,body.q.rev .props{flex:none;overflow:visible}
+body.q.rev #cEnonce,body.q.rev .props{flex:none;height:auto;overflow:visible}
 @keyframes pop{from{transform:scale(.97);opacity:.4}to{transform:none;opacity:1}}
 .carte{animation:pop .22s ease-out}
 """
@@ -144,19 +240,49 @@ function mqRendre(){
   mqAjuster();
   if(document.body.getAttribute('data-bas')){window.scrollTo(0,document.body.scrollHeight);}
 }
+function mqMarge(el){var c=window.getComputedStyle(el);return (parseFloat(c.marginTop)||0)+(parseFloat(c.marginBottom)||0);}
+function mqPartage(nE,nP,A){
+  // Répartition « eau » : celui qui a besoin de moins de place la cède à l'autre.
+  if(nE+nP<=A){return [nE,A-nE];}      // tout tient : l'énoncé prend son dû, les propositions récupèrent le reste
+  var m=A/2;
+  if(nE<=m){return [nE,A-nE];}         // énoncé court : il cède, les propositions prennent le surplus
+  if(nP<=m){return [A-nP,nP];}         // propositions courtes : elles cèdent, l'énoncé prend le surplus
+  return [m,m];                        // les deux sont longs : moitié-moitié, chacun défile dans sa zone
+}
+var mqEnCours=false;
 function mqAjuster(){
-  var b=document.body;if(!b||!b.classList.contains('q')||b.classList.contains('rev')){return;}
+  var b=document.body;if(!b||!b.classList.contains('q')||b.classList.contains('rev')||mqEnCours){return;}
   var e=document.getElementById('cEnonce'),p=document.querySelector('.props');if(!e||!p){return;}
-  // réduction douce : jamais en dessous de 0.85 (au-delà, on laisse scroller)
-  var z=1;b.style.setProperty('--z','1');
-  for(var i=0;i<6;i++){
-    var trop=(e.scrollHeight>e.clientHeight+2)||(p.scrollHeight>p.clientHeight+2);
-    if(!trop||z<=0.85){break;}
-    z=Math.round((z-0.03)*100)/100;b.style.setProperty('--z',String(z));
-  }
+  mqEnCours=true;
+  try{
+    var cs=window.getComputedStyle(b);
+    var autres=0;
+    for(var i=0;i<b.children.length;i++){
+      var c=b.children[i];
+      if(c===e||c===p){continue;}
+      if(window.getComputedStyle(c).display==='none'||window.getComputedStyle(c).position==='fixed'||c.tagName==='SCRIPT'||c.tagName==='STYLE'||c.tagName==='LINK'){continue;}
+      autres+=c.offsetHeight+mqMarge(c);
+    }
+    var A=b.clientHeight-(parseFloat(cs.paddingTop)||0)-(parseFloat(cs.paddingBottom)||0)-autres;
+    var mE=mqMarge(e),mP=mqMarge(p),z=1,nE=0,nP=0;
+    for(var k=0;k<9;k++){
+      b.style.setProperty('--z',String(z));
+      e.style.cssText='flex:none;height:auto;overflow:visible';
+      p.style.cssText='flex:none;height:auto;overflow:visible';
+      nE=e.offsetHeight+mE;nP=p.offsetHeight+mP;
+      if(nE+nP<=A||z<=0.8){break;}
+      z=Math.round((z-0.03)*100)/100;       // on réduit d'abord un peu la police avant de faire défiler
+    }
+    var r=mqPartage(nE,nP,A);
+    e.style.cssText='flex:none;overflow-y:auto;height:'+Math.max(40,r[0]-mE)+'px';
+    p.style.cssText='flex:none;overflow-y:auto;height:'+Math.max(60,r[1]-mP)+'px';
+  }catch(x){console.warn('mqAjuster',x);}
+  mqEnCours=false;
 }
 window.addEventListener('resize',function(){mqAjuster();});
-window.addEventListener('load',function(){setTimeout(mqAjuster,60);setTimeout(mqAjuster,400);});
+window.addEventListener('load',function(){setTimeout(mqAjuster,60);setTimeout(mqAjuster,400);setTimeout(mqAjuster,1200);});
+window.addEventListener('orientationchange',function(){setTimeout(mqAjuster,200);});
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){mqAjuster();});}
 window.__mq_choix=-1;
 document.addEventListener('click',function(e){
   var o=e.target&&e.target.closest?e.target.closest('.opt'):null;
@@ -188,6 +314,8 @@ function mqMarquer(i){document.querySelectorAll('.opt').forEach(function(o,k){o.
   var e=document.getElementById('envoye');if(e){e.style.display='block';}}
 function mqReveler(choisi,correct){
   document.body.classList.add('lock');document.body.classList.add('rev');
+  var ee=document.getElementById('cEnonce'),pp=document.querySelector('.props');
+  if(ee){ee.style.cssText='';}if(pp){pp.style.cssText='';}
   document.querySelectorAll('.opt').forEach(function(o,k){o.classList.remove('sel');
     if(k===correct){o.classList.add('bon');} else if(k===choisi){o.classList.add('mauv');}});
   var v=document.getElementById('verdict');
@@ -197,6 +325,11 @@ function mqReveler(choisi,correct){
     else{v.className='verdict f';v.textContent='> MAUVAISE RÉPONSE';}}
   var x=document.getElementById('expl');if(x){x.style.display='block';}
   if(v){v.scrollIntoView({behavior:'smooth',block:'start'});}
+}
+function mqSet(cls,bas,h){
+  var b=document.body;b.className=cls||'';b.removeAttribute('style');
+  if(bas){b.setAttribute('data-bas','1');}else{b.removeAttribute('data-bas');}
+  b.innerHTML=h;window.__mq_choix=-1;mqEnCours=false;window.scrollTo(0,0);mqRendre();
 }
 (function(){
   var go=function(){setTimeout(mqDemarrer,30);};
@@ -261,6 +394,10 @@ class AndroidMathWebView(Widget):
     """Widget Kivy : WebView native sur Android ; aperçu texte (avec boutons) sur PC."""
 
     _instances = weakref.WeakSet()
+    _vue_partagee = None      # UNE seule WebView native pour toute l'appli (mise à jour en place, jamais recréée)
+    _proprietaire = None      # weakref de l'instance qui l'utilise actuellement
+    _layout_ok_logue = False
+    _prete = False            # la page de base (KaTeX + scripts) est chargée dans la vue partagée
 
     def __init__(self, html="", **kwargs):
         self.sous_entete = kwargs.pop("sous_entete", True)
@@ -281,17 +418,33 @@ class AndroidMathWebView(Widget):
 
         self.bind(parent=self._on_parent)
 
+        self._manque_racine = 0
+        # Affichage de secours (texte + boutons), TOUJOURS présent sous la WebView : si la vue native ne s'affiche pas
+        # (ex. Pydroid3), la question reste lisible et jouable ; sinon la WebView le recouvre.
+        self._fallback_box = BoxLayout(orientation="vertical", spacing=dp(4))
+        self._diag_label = Label(text="", markup=True, size_hint_y=None, height=0, font_size="11sp",
+                                 halign="left", valign="top", color=(1, 0.45, 0.45, 1))
+        self._diag_label.bind(size=lambda inst, val: setattr(inst, "text_size", (val[0] - 16, None)))
+        self._fallback = Label(text="", halign="left", valign="top", markup=True, color=(0.9, 0.95, 1, 1))
+        self._fallback.bind(size=lambda inst, val: setattr(inst, "text_size", (val[0] - 16, val[1])))
+        self._fallback_opts = BoxLayout(orientation="vertical", size_hint_y=None, height=0, spacing=dp(4))
+        self._fallback_box.add_widget(self._diag_label)
+        self._fallback_box.add_widget(self._fallback)
+        self._fallback_box.add_widget(self._fallback_opts)
+        self.add_widget(self._fallback_box)
+        self.bind(pos=self._maj_fallback, size=self._maj_fallback)
+
         if platform == "android":
             Clock.schedule_once(lambda dt: self._create_native_view(), 0)
-        else:
-            self._fallback_box = BoxLayout(orientation="vertical", spacing=dp(4))
-            self._fallback = Label(text="", halign="left", valign="top", markup=True, color=(0.9, 0.95, 1, 1))
-            self._fallback.bind(size=lambda inst, val: setattr(inst, "text_size", (val[0] - 16, val[1])))
-            self._fallback_opts = BoxLayout(orientation="vertical", size_hint_y=None, height=0, spacing=dp(4))
-            self._fallback_box.add_widget(self._fallback)
-            self._fallback_box.add_widget(self._fallback_opts)
-            self.add_widget(self._fallback_box)
-            self.bind(pos=self._maj_fallback, size=self._maj_fallback)
+
+    def _signaler(self, msg):
+        """Affiche l'erreur dans la zone (rouge) et la trace dans diag_webview.txt."""
+        _diag(msg)
+
+        def maj(dt):
+            self._diag_label.text = "WebView : " + msg[:220]
+            self._diag_label.height = dp(54)
+        Clock.schedule_once(maj, 0)
 
     # ------------------------------------------------------------------ API
     def set_question(self, q, titre_tete="", points="", avec_explication=True, cliquable=False, on_choix=None):
@@ -299,11 +452,10 @@ class AndroidMathWebView(Widget):
         self._verrouille = False
         self._on_choix = on_choix if cliquable else None
         self.html = generer_page(q, titre_tete, points, avec_explication, cliquable=bool(cliquable and on_choix))
-        if platform == "android":
-            if self._native_view is not None:
-                self._charger_html()
-                self._demarrer_poll()
-        else:
+        if self._native_view is not None:
+            self._charger_html()
+            self._demarrer_poll()
+        if True:
             lignes = [f"[b][color=00f0ff]{titre_tete}[/color][/b]   [color=ff2bd6]{points}[/color]", "",
                       q.get("enonce_txt") or latex_vers_texte(q.get("enonce", "")), ""]
             textes = q.get("options_txt") or [latex_vers_texte(x) for x in q.get("options", [])]
@@ -323,10 +475,9 @@ class AndroidMathWebView(Widget):
     def set_document(self, titre, cartes, defiler_bas=False):
         self._on_choix = None
         self.html = generer_page_document(titre, cartes, defiler_bas=defiler_bas)
-        if platform == "android":
-            if self._native_view is not None:
-                self._charger_html()
-        else:
+        if self._native_view is not None:
+            self._charger_html()
+        if True:
             lignes = [f"[b][color=00f0ff]{titre}[/color][/b]", ""]
             for etiq, texte, style in cartes:
                 lignes += [f"[b]{etiq}[/b]", latex_vers_texte(texte), ""]
@@ -344,14 +495,14 @@ class AndroidMathWebView(Widget):
     def verrouiller(self):
         self._verrouille = True
         self._js("mqVerrouiller()")
-        if platform != "android" and hasattr(self, "_fallback_opts"):
+        if hasattr(self, "_fallback_opts"):
             for b in self._fallback_opts.children:
                 b.disabled = True
 
     def reveler(self, choisi, correct):
         self._verrouille = True
         self._js(f"mqReveler({int(choisi)},{int(correct)})")
-        if platform != "android" and self._derniere_question:
+        if self._derniere_question:
             q = self._derniere_question[0]
             for b in self._fallback_opts.children:
                 b.disabled = True
@@ -360,7 +511,7 @@ class AndroidMathWebView(Widget):
     def set_visible(self, visible):
         self._visible = visible
         self._dernier_layout = None
-        if platform != "android" and hasattr(self, "_fallback_box"):
+        if hasattr(self, "_fallback_box"):
             self._fallback_box.opacity = 1 if visible else 0
 
     @classmethod
@@ -443,8 +594,8 @@ class AndroidMathWebView(Widget):
         if parent is None:
             Clock.schedule_once(self.detruire, 0)
 
-    def detruire(self, *args):
-        if self.parent is not None:
+    def detruire(self, *args, force=False):
+        if self.parent is not None and not force:
             return
         self._detruit = True
         for ev in (self._poll_ev, self._frame_ev):
@@ -455,17 +606,17 @@ class AndroidMathWebView(Widget):
             return
         webview = self._native_view
         self._native_view = None
+        cls = AndroidMathWebView
+        if cls._proprietaire is not None and cls._proprietaire() is self:
+            cls._proprietaire = None
 
         @run_on_ui_thread
-        def remove():
+        def cacher():
             try:
-                p = webview.getParent()
-                if p is not None:
-                    p.removeView(webview)
-                webview.destroy()
+                webview.setVisibility(8)        # GONE : disparaît immédiatement quand on quitte la page
             except Exception as e:
-                print(f"[AndroidMathWebView] Erreur destruction: {e}")
-        remove()
+                print(f"[AndroidMathWebView] Erreur masquage: {e}")
+        cacher()
 
     def _create_native_view(self):
         if platform != "android" or self._native_view is not None or self._detruit:
@@ -474,15 +625,26 @@ class AndroidMathWebView(Widget):
         @run_on_ui_thread
         def create():
             try:
+                partagee = AndroidMathWebView._vue_partagee
+                if partagee is not None:                       # déjà créée : on la réutilise
+                    self._adopter(partagee)
+                    self._charger_html()
+                    Clock.schedule_once(lambda dt: self._demarrer_suivi(), 0)
+                    return
                 from jnius import autoclass
                 WebView = autoclass("android.webkit.WebView")
                 WebViewClient = autoclass("android.webkit.WebViewClient")
                 FrameLayoutParams = autoclass("android.widget.FrameLayout$LayoutParams")
                 Gravity = autoclass("android.view.Gravity")
                 Color = autoclass("android.graphics.Color")
-                PythonActivity = autoclass("org.kivy.android.PythonActivity")
 
-                activity = PythonActivity.mActivity
+                activity, conteneur = _resoudre_activite()
+                try:
+                    # Pydroid3 : l'appli Kivy tourne dans un 2e processus ; sans suffixe, Android refuse
+                    # « WebView from more than one process with the same data directory »
+                    WebView.setDataDirectorySuffix("nexusmath")
+                except Exception as e:
+                    _diag(f"setDataDirectorySuffix: {e}")
                 webview = WebView(activity)
                 webview.setWebViewClient(WebViewClient())
                 webview.setBackgroundColor(Color.parseColor("#05050A"))
@@ -501,29 +663,92 @@ class AndroidMathWebView(Widget):
 
                 params = FrameLayoutParams(1, 1)
                 params.gravity = Gravity.TOP | Gravity.LEFT
+                ajoute = False
                 try:
-                    conteneur = PythonActivity.mLayout
+                    activity.addContentView(webview, params)       # toujours rattaché à la fenêtre visible
+                    ajoute = True
+                    _diag("vue ajoutée via addContentView")
+                except Exception as e:
+                    _diag(f"addContentView: {e}")
+                if not ajoute and conteneur is not None:
                     conteneur.addView(webview, params)
+                    _diag("vue ajoutée via le conteneur SDL")
+                try:
+                    webview.bringToFront()
                 except Exception:
-                    activity.addContentView(webview, params)
+                    pass
 
-                self._native_view = webview
+                AndroidMathWebView._vue_partagee = webview
+                self._adopter(webview)
                 self._charger_html()
                 Clock.schedule_once(lambda dt: self._demarrer_suivi(), 0)
+                _diag("WebView native créée")
             except Exception as e:
-                print(f"[AndroidMathWebView] Erreur création: {e}")
-        create()
+                self._signaler(f"création impossible : {e}")
+        try:
+            create()
+        except Exception as e:
+            self._signaler(f"thread UI inaccessible : {e}")
 
     def _demarrer_suivi(self):
         if self._detruit or self._frame_ev is not None:
             return
         self._frame_ev = Clock.schedule_interval(self._sync_frame, 1 / 20.0)
         self._demarrer_poll()
+        Clock.schedule_once(self._rapport_natif, 3)
+
+    def _rapport_natif(self, dt):
+        """Écrit dans diag_webview.txt l'état réel de la vue native (et l'affiche si elle est invisible)."""
+        wv = self._native_view
+        if wv is None or self._detruit:
+            return
+        fen = f"{int(Window.width)}x{int(Window.height)}"
+        cle = self._dernier_layout
+
+        @run_on_ui_thread
+        def lire():
+            try:
+                par = wv.getParent()
+                nom = par.getClass().getName() if par is not None else None
+                visible = bool(wv.isShown())
+                w, h = int(wv.getWidth()), int(wv.getHeight())
+                info = (f"état: parent={nom} vis={wv.getVisibility()} affichée={visible} taille={w}x{h} "
+                        f"pos={wv.getLeft()},{wv.getTop()} alpha={wv.getAlpha()} fenêtre_kivy={fen} calcul={cle}")
+                _diag(info)
+                if not visible or w <= 2 or h <= 2:
+                    self._signaler(info)
+            except Exception as e:
+                _diag(f"rapport: {e}")
+        lire()
+
+    def _adopter(self, webview):
+        """Cette instance devient la propriétaire de la vue partagée (l'ancienne est détachée)."""
+        cls = AndroidMathWebView
+        ancien = cls._proprietaire() if cls._proprietaire else None
+        if ancien is not None and ancien is not self:
+            ancien._native_view = None
+            ancien._detruit = True
+            for ev in (ancien._poll_ev, ancien._frame_ev):
+                if ev is not None:
+                    ev.cancel()
+            ancien._poll_ev = ancien._frame_ev = None
+        cls._proprietaire = weakref.ref(self)
+        self._native_view = webview
+        self._dernier_layout = None
 
     def _charger_html(self):
+        """Met à jour la page : si la page de base est déjà chargée, on remplace seulement le contenu (JS) ;
+        sinon (1er affichage) on charge la page complète une seule fois."""
         if self._native_view is None or not self.html:
             return
         webview, html, base = self._native_view, self.html, self._base_url
+        m = re.search(r"<body([^>]*)>(.*)</body>", html, re.S)
+        if AndroidMathWebView._prete and m is not None:
+            attrs = m.group(1)
+            c = re.search(r'class="([^"]*)"', attrs)
+            self._js("mqSet(%s,%s,%s)" % (json.dumps(c.group(1).strip() if c else ""),
+                                          "true" if "data-bas" in attrs else "false", json.dumps(m.group(2))))
+            return
 
         @run_on_ui_thread
         def charger():
@@ -532,6 +757,8 @@ class AndroidMathWebView(Widget):
             except Exception as e:
                 print(f"[AndroidMathWebView] Erreur chargement: {e}")
         charger()
+        # la page de base sera « prête » dès que ses scripts ont fini de se charger
+        Clock.schedule_once(lambda dt: setattr(AndroidMathWebView, "_prete", True), 1.2)
 
     def _js(self, code):
         if platform != "android" or self._native_view is None:
@@ -579,6 +806,13 @@ class AndroidMathWebView(Widget):
     def _sync_frame(self, dt):
         if self._native_view is None or self._detruit:
             return
+        if self.get_root_window() is None:            # la page qui contenait cette vue a été quittée
+            self._manque_racine += 1
+            if self._manque_racine > 15:              # ~0,75 s hors de l'écran : on supprime la vue native
+                self.detruire(force=True)
+                return
+        else:
+            self._manque_racine = 0
         z = self._zone_visible()
         if z is None:
             cle = (0, 0, 0, 0, False)
@@ -591,18 +825,34 @@ class AndroidMathWebView(Widget):
         webview = self._native_view
         x, top, w, hh, visible = cle
 
+        try:
+            from jnius import autoclass
+            FLP = autoclass("android.widget.FrameLayout$LayoutParams")
+            Gravite = autoclass("android.view.Gravity")
+        except Exception as e:
+            _diag(f"autoclass layout: {e}")
+            return
+
         @run_on_ui_thread
         def appliquer():
-            try:
-                if visible:
-                    params = webview.getLayoutParams()
-                    params.width = max(1, w)
-                    params.height = max(1, hh)
-                    params.setMargins(x, max(0, top), 0, 0)
+            # 1) taille + position : on construit de NOUVEAUX paramètres (getLayoutParams() renvoie le type générique
+            #    ViewGroup.LayoutParams, sans setMargins → l'ancienne version échouait et la vue restait 1×1 / cachée)
+            if visible:
+                try:
+                    params = FLP(max(1, w), max(1, hh))
+                    params.gravity = Gravite.TOP | Gravite.LEFT
+                    params.setMargins(int(x), int(max(0, top)), 0, 0)
                     webview.setLayoutParams(params)
-                    webview.requestLayout()          # ← indispensable sur certains Android
+                    webview.requestLayout()
                     webview.invalidate()
+                    if not AndroidMathWebView._layout_ok_logue:
+                        AndroidMathWebView._layout_ok_logue = True
+                        _diag(f"layout appliqué : x={x} haut={top} {w}x{hh}")
+                except Exception as e:
+                    _diag(f"Erreur layout: {e}")
+            # 2) visibilité : toujours appliquée, même si le layout a échoué
+            try:
                 webview.setVisibility(0 if visible else 4)
             except Exception as e:
-                print(f"[AndroidMathWebView] Erreur layout: {e}")
+                _diag(f"Erreur visibilité: {e}")
         appliquer()
