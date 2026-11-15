@@ -35,6 +35,7 @@ Application mobile Android de quiz de mathématiques développée en Python/Kivy
 ## 📸 Aperçu de l'Application
 
 | Écran Principal | Quiz en cours |
+| Paramètres | Suivis du joueur |
 | :---: | :---: |
 | ![Écran 1](docs/screenshots/menu_principale.jpg) | ![Écran 2](docs/screenshots/choix_classe.jpg) |
 [Écran 3](docs/screenshots/parametre.jpg) |
