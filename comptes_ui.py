@@ -305,6 +305,7 @@ class FonctionsComptes:
                 if isinstance(v, (list, tuple)) and len(v) == 2 and (not loc or v[1] > loc[1]):
                     self.stats_chapitres[chap] = [v[0], v[1]]
         self.sauvegarder_donnees_locales()
+        self.rangs_resync()                                 # pas de popup de promotion pour un rang récupéré du serveur
         self.synchroniser_profil(force=True)
         if nouveau:
             self.afficher_popup_succes_identifiant(self.identifiant_joueur)
@@ -345,5 +346,6 @@ class FonctionsComptes:
         self.historique_scores = []
         for k in list(self.stats_chapitres):
             self.stats_chapitres[k] = [0, 0]
+        self.rangs_resync()
         self.sauvegarder_donnees_locales()
         self.afficher_accueil_compte()

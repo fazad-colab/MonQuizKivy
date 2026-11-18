@@ -67,6 +67,7 @@ AMBRE = (0.95, 0.65, 0.05, 1)
 # =======================================
 class SoundManager:
     actif = True
+    volume_fx = 1.0          # multiplicateur réglable dans Paramètres › Réglages audio
     _cache = {}
 
     @staticmethod
@@ -83,7 +84,7 @@ class SoundManager:
                         break
                 SoundManager._cache[nom] = s or False
             if s:
-                s.volume = volume
+                s.volume = max(0.0, min(1.0, volume * SoundManager.volume_fx))
                 s.stop()
                 s.play()
         except Exception:
@@ -553,6 +554,9 @@ class FonctionsEnLigne:
 
     # ------------------------------------------------------------ hub multijoueur
     def afficher_hub_multijoueur(self, instance=None):
+        self.locky_signal("hub_multi")
+        if self.page_hub():
+            return
         self._ecran("Multijoueur & Classe", "Choisis comment jouer :\n• sur le même téléphone (limité)\n"
                     "• en ligne, chacun sur son téléphone (sans limite)\n• en classe avec le professeur")
         L = self.interaction_layout
@@ -694,7 +698,7 @@ class FonctionsEnLigne:
                     else "Choisis les réglages. Tes amis rejoignent avec le code (tu joues aussi).", 0.16)
         cfg = {"classe": self.classe_utilisateur if self.classe_utilisateur in CLASSES else "3ème", "chapitres": [],
                "nb_questions": 10, "temps_par_question": 30, "avance": "manuel", "bonus_vitesse": True,
-               "points_bonne": 100}
+               "points_bonne": 100, "calculatrice": True}
         L = self.interaction_layout
 
         zone_chap = BoxLayout(orientation="vertical", size_hint=(1, None), spacing=dp(4))
@@ -751,13 +755,14 @@ class FonctionsEnLigne:
         L.add_widget(cycle("Passage à la suivante", "avance", ["manuel", "auto"], lambda v: "par le professeur" if v == "manuel" and prof else ("manuel" if v == "manuel" else "automatique")))
         L.add_widget(cycle("Bonus de rapidité", "bonus_vitesse", [True, False], lambda v: "oui" if v else "non"))
         L.add_widget(cycle("Points par bonne réponse", "points_bonne", [50, 100, 200], str))
+        L.add_widget(cycle("Calculatrice", "calculatrice", [True, False], lambda v: "autorisée" if v else "interdite"))
 
         def creer():
             corps = {"type": type_, "hote_id": self.identifiant_joueur, "hote_nom": self.nom_utilisateur,
                      "config": {**cfg, "difficulte": self.determiner_rang_et_details()[3], "hote_joue": not prof,
                                 "titre": f"Classe de {self.nom_utilisateur}" if prof else ""}}
             self.api("/api/salon/creer", corps, timeout=10,
-                     ok=lambda r: self._salon_demarrer(r["code_pin"], "hote", type_, r.get("config", cfg)),
+                     ok=lambda r: self._salon_demarrer(r["code_pin"], "hote", type_, {**r.get("config", cfg), "calculatrice": cfg["calculatrice"]}),
                      err=lambda m: self.toast("Création impossible : " + str(m)))
         L.add_widget(bouton("Créer la salle", VERT, creer, h=54, neon=VERT))
         L.add_widget(self._retour_accueil_btn("« Retour", lambda: self.afficher_hub_multijoueur()))
@@ -788,7 +793,9 @@ class FonctionsEnLigne:
 
     # ------------------------------------------------------------- cycle d'une salle
     def _salon_demarrer(self, code, role, type_, cfg, hote_nom=""):
+        self.locky_signal("salle_attente")
         self._ecran("Salle " + code, "Connexion à la salle…", 0.2)
+        self.interaction_layout.add_widget(self._retour_accueil_btn("« Retour", self.quitter_salon))   # jamais bloqué si la connexion échoue
         self.salon = {"code": code, "role": role, "type": type_, "cfg": cfg, "vue": None, "index_affiche": -1,
                       "hote_nom": hote_nom, "stats_envoyees": False, "a_repondu": False, "widgets": {}}
         self._poll_salon = Clock.schedule_interval(self._salon_poll, 1.2)
@@ -865,6 +872,7 @@ class FonctionsEnLigne:
 
     # -- question ---------------------------------------------------------------
     def _vue_question(self, res):
+        self.locky_signal("salle_question", n=res.get("index_q", 0) + 1)
         s = self.salon
         s["vue"] = "question"
         s["index_affiche"] = res["index_q"]
@@ -873,12 +881,11 @@ class FonctionsEnLigne:
         joue = (not hote) or s["cfg"].get("hote_joue") or res.get("config", {}).get("hote_joue")
         q = res["question"]
         self._ecran(f"Question {res['index_q'] + 1}/{res['nb_questions']}", "", 0.0, garder_poll=True)
-        self.scroll_texte.size_hint_y = None
-        self.scroll_texte.height = 0
-        self.scroll_interaction.size_hint_y = 1
+        self._disposition_question()          # plein écran : la page se partage l'espace avec les boutons du bas
         L = self.interaction_layout
+        L.clear_widgets()
         s["widgets"] = {}
-        web = AndroidMathWebView(size_hint=(1, None), height=dp(430 if joue else 300))
+        web = AndroidMathWebView(size_hint=(1, 1))
         web.set_question({"enonce": q["enonce"], "options": q["options"], "explication": ""},
                          titre_tete=f"Salle {s['code']} · Q{res['index_q'] + 1}/{res['nb_questions']}", avec_explication=False,
                          cliquable=bool(joue) and not s["a_repondu"], on_choix=self._salon_repondre)
@@ -891,7 +898,9 @@ class FonctionsEnLigne:
             web.verrouiller()
         if hote:
             s["widgets"]["liste"] = etiquette("", taille="13sp", align="left")
-            L.add_widget(s["widgets"]["liste"])
+            zone_liste = ScrollView(size_hint=(1, None), height=dp(64), do_scroll_x=False)
+            zone_liste.add_widget(s["widgets"]["liste"])
+            L.add_widget(zone_liste)
             ligne = BoxLayout(size_hint=(1, None), height=dp(50), spacing=dp(6))
             ligne.add_widget(bouton("Question suivante »", VERT, lambda: self._salon_action("suivante"), h=50, font="14sp", neon=VERT))
             ligne.add_widget(bouton("Voir les réponses", PANEL2, self.afficher_details_reponses, h=50, font="14sp", neon=AMBRE))
@@ -899,7 +908,6 @@ class FonctionsEnLigne:
             L.add_widget(bouton("Terminer la session", ROUGE, lambda: self._salon_action("terminer"), h=46, neon=ROUGE))
         else:
             L.add_widget(self._retour_accueil_btn("Quitter la salle", self.quitter_salon))
-        self._fixer_hauteur()
         SoundManager.play("notif")
 
     def _verrouiller_boutons(self, choisi=None):
@@ -943,10 +951,10 @@ class FonctionsEnLigne:
                       for p in res.get("participants", [])]
             w["liste"].markup = True
             w["liste"].text = "\n".join(lignes[:40])
-            self._fixer_hauteur()
 
     # -- fin : tableau des scores pour tout le monde ------------------------------
     def _vue_fin(self, res):
+        self.locky_signal("salle_fin")
         s = self.salon
         s["vue"] = "fin"
         self.chrono_label.text = ""
@@ -981,21 +989,19 @@ class FonctionsEnLigne:
             return
 
         def affiche(res):
-            sv = ScrollView(do_scroll_x=False)
-            col = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(8), padding=dp(6))
-            col.bind(minimum_height=col.setter("height"))
+            cartes = []
             for q in res["questions"]:
                 taux = q["taux_reussite"]
-                lignes = [f"[b]Q{q['index'] + 1}.[/b] {latex_vers_texte(q['enonce'])}",
-                          f"[color=22ff88]Bonne réponse : {latex_vers_texte(q['bonne_reponse'])}[/color]   "
-                          f"(réussite : {'—' if taux is None else str(taux) + ' %'})"]
+                corps = [f"{q['enonce']}", "", f"Bonne réponse : {q['bonne_reponse']}   (réussite : {'—' if taux is None else str(taux) + ' %'})", ""]
                 for r in q["reponses"]:
-                    ok_ = r["correct"]
-                    lignes.append(("[color=22ff88]✔[/color] " if ok_ else "[color=ff3b5c]✘[/color] ") +
-                                  f"{r['nom']} : {latex_vers_texte(r['choix_texte'] or '—')}  ({r['temps_ms'] / 1000:.1f}s)")
-                col.add_widget(etiquette("\n".join(lignes), taille="13sp", markup=True, align="left"))
-            sv.add_widget(col)
-            p = self._popup("Réponses des élèves", sv, (0.96, 0.85))
+                    corps.append(("✔ " if r["correct"] else "✘ ") + f"{r['nom']} : {r['choix_texte'] or '—'}  ({r['temps_ms'] / 1000:.1f}s)")
+                cartes.append((f"Question {q['index'] + 1}", "\n".join(corps), ""))
+            contenu = BoxLayout(orientation="vertical", spacing=dp(6))
+            web = AndroidMathWebView(size_hint=(1, 1), sous_entete=False)       # dans un popup : pas de limite d'en-tête
+            web.set_document("Réponses des élèves", cartes)
+            contenu.add_widget(web)
+            p = self._popup("Réponses des élèves", contenu, (0.96, 0.85))
+            contenu.add_widget(bouton("« Fermer", ROUGE, p.dismiss, h=46, neon=ROUGE))
             p.open()
         self.api(f"/api/salon/{s['code']}/resultats?id={self.identifiant_joueur}", ok=affiche,
                  err=lambda m: self.toast("Erreur : " + str(m)), timeout=8)

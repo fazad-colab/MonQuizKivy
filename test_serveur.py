@@ -135,4 +135,11 @@ assert r["points_rang_accepte"] <= 22, r
 r = post("/api/sauvegarde", identifiant=tr, points_de_rang=5, total=3)              # une baisse reste possible
 assert r["points_rang_accepte"] == 5
 
+# --- durcissement : en-têtes de sécurité, taille des requêtes, plafond par compte ---------------
+r = c.get("/api/ping")
+assert r.headers.get("X-Content-Type-Options") == "nosniff" and r.headers.get("Cache-Control") == "no-store"
+r = c.post("/api/inscription", data="x" * 300000, content_type="application/json")
+assert r.status_code == 413 and r.get_json()["status"] == "error", "les requêtes de plus de 256 Ko doivent être refusées"
+assert F._nettoyer_court("Terminale <script>{x}</script>\n`ignore`", 40) == "Terminale script x /script ignore"
+
 print("✅ Tous les tests serveur passent (salon classe, anti-triche, stats, recherche, en ligne, admin, suppression)")

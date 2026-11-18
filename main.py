@@ -6,14 +6,17 @@ import os
 import sys
 import webbrowser
 import traceback
-#os.environ['KIVY_AUDIO'] = 'sdl2'  # doit précéder tout import kivy
 from kivy.utils import platform
 from android_math_webview import AndroidMathWebView, LETTRES
 from comptes_ui import FonctionsComptes
-from latex_utils import latex_vers_texte
+from locky_ui import FonctionsLocky
+from parametres_ui import FonctionsParametres
+from rangs_ui import FonctionsRangs
+from pages_ui import FonctionsPages
+from latex_utils import latex_vers_texte, texte_vers_latex
+from modules_defis import generer_activite, generer_casse_tete, TYPES_CASSE_TETE
 from html import escape
 from kivy.uix.widget import Widget
-os.environ['KIVY_AUDIO'] = 'sdl2'
 from kivy.uix.slider import Slider
 from kivy.core.window import Window
 from kivy.uix.popup import Popup
@@ -37,7 +40,6 @@ from kivy.graphics import Color, RoundedRectangle, Rectangle, Ellipse
 from kivy.network.urlrequest import UrlRequest
 from kivy.core.text import LabelBase
 
-# Fiches de cours en LaTeX (rendu KaTeX) : (titre, texte avec $maths$)
 FICHES_LATEX = {
     "6ème": [("Priorités", "Multiplications et divisions d'abord, puis additions et soustractions."),
              ("Cercle", "Périmètre : $P = 2 \\times \\pi \\times R$"),
@@ -107,8 +109,9 @@ class DraggableMascot(FloatLayout):
         self.layout_interne.add_widget(self.bulle_label)
         self.add_widget(self.layout_interne)
 
-        Clock.schedule_interval(self.changer_message_aleatoire, 10)
-        Clock.schedule_interval(self.declencher_acrobatie, 15)
+        # Locky ne parle plus au hasard : il réagit aux événements (voir locky_ui.FonctionsLocky.locky_signal)
+        self._ev_tap = None
+        self.is_dragging = False
 
     def _update_graphics(self, instance, value):
         self.bg_rect.pos = self.pos
@@ -117,6 +120,9 @@ class DraggableMascot(FloatLayout):
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
             if touch.is_double_tap:
+                if self._ev_tap is not None:
+                    self._ev_tap.cancel()
+                    self._ev_tap = None
                 self.declencher_excitation()
                 return True
             self.is_dragging = False
@@ -141,9 +147,22 @@ class DraggableMascot(FloatLayout):
 
     def on_touch_up(self, touch):
         if self.collide_point(*touch.pos) or getattr(self, 'is_dragging', False):
+            deplace = getattr(self, 'is_dragging', False)
             self.is_dragging = False
+            if not deplace and not touch.is_double_tap and self.collide_point(*touch.pos):
+                # 1 seul appui : menu de Locky (après un court délai pour laisser passer un éventuel double appui)
+                self._ev_tap = Clock.schedule_once(self._tap_simple, 0.3)
             return True
         return super().on_touch_up(touch)
+
+    def _tap_simple(self, dt):
+        self._ev_tap = None
+        app = App.get_running_app()
+        if hasattr(app, 'locky_tap'):
+            app.locky_tap()
+
+    def dire(self, texte):
+        self.bulle_label.text = texte
 
     def creer_paillette(self, dt):
         pos_globale_x, pos_globale_y = self.to_window(self.center_x, self.center_y)
@@ -208,7 +227,7 @@ class DraggableMascot(FloatLayout):
         anim.start(self)
 
 # ___CLASS PRINCIPAL ___
-class FixedDynamicQuizApp(FonctionsComptes, FonctionsEnLigne, App):
+class FixedDynamicQuizApp(FonctionsPages, FonctionsRangs, FonctionsParametres, FonctionsLocky, FonctionsComptes, FonctionsEnLigne, App):
     def build(self):
 
         if Window:
@@ -221,6 +240,7 @@ class FixedDynamicQuizApp(FonctionsComptes, FonctionsEnLigne, App):
         self.playlist = []
         self.playlist_question = []
         self.xp_mascotte = 0
+        self.locky_defauts()
 
         # --- VARIABLES GLOBALES DE SESSION ---
         self.score = 0
@@ -243,7 +263,7 @@ class FixedDynamicQuizApp(FonctionsComptes, FonctionsEnLigne, App):
         self.niveau_choisie = ""
         self.index_grade = 1
         self.nom_developpeur = "Fazad Nassur"
-        self.jeton_compte = ""              # jeton de session renvoyé par le serveur (jamais le mot de passe)
+        self.jeton_compte = ""       
         self.ile_utilisateur = ""
         self.email_utilisateur = ""
         self.compte_hors_ligne = False
@@ -414,6 +434,7 @@ class FixedDynamicQuizApp(FonctionsComptes, FonctionsEnLigne, App):
         self.mascotte = DraggableMascot()
         self.root_layout.add_widget(self.mascotte)
         self.charger_donnees_locales()
+        self.locky_init()          # Locky au premier plan (surcouche Android) + menu + calculatrice
 
         Clock.schedule_interval(self.tenter_synchronisation_file_attente, 15.0)
         self.init_en_ligne()          # réseau, sons, copie d'ID, salles, joueurs
@@ -696,12 +717,16 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             self.info_layout.add_widget(self.btn_parametres)
 
         self.charger_donnees_locales()
+        self.audio_appliquer_sauvegarde()       # volume / musique choisis dans Réglages audio
+        self.locky_enregistrer_connexion()      # +1 point de connexion / jour ; 7 points = +1 niveau de Locky
         if self.compte_requis():
             self.demander_nom_utilisateur()     # créer / récupérer un compte (ou continuer hors-ligne)
         else:
             self.afficher_menu_principal_modes()
 
-    def ouvrir_menu_parametres(self, instance):
+    def ouvrir_menu_parametres_legacy(self, instance):
+        """Ancien menu Kivy (secours). Le menu par catégories est FonctionsParametres.ouvrir_menu_parametres."""
+        self.locky_signal("parametres")
         if hasattr(self, 'layout_parametres') and self.layout_parametres in self.root_layout.children:
             self.root_layout.remove_widget(self.layout_parametres)
 
@@ -925,7 +950,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             "[b]Guide d'utilisation des Paramètres :[/b]\n\n"
             "- [i]Modifier mes informations personnelles :[/i] Permet de mettre à jour votre nom, votre niveau universitaire ou de classe, votre âge ainsi que votre sexe. Des suggestions intelligentes s'affichent automatiquement lors de la saisie.\n\n"
             "- [i]Consulter mes données enregistrées :[/i] Affiche un récapitulatif complet de toutes vos informations personnelles actuellement sauvegardées dans l'application.\n\n"
-            "- [i]À propos & Version Pro :[/b] Fournit les informations sur l'application (Version , développeur Fazad Nassur) et l'accès aux fonctionnalités avancées.\n\n"
+            "- [i]À propos & Version Pro :[/i] Fournit les informations sur l'application (Version , développeur Fazad Nassur) et l'accès aux fonctionnalités avancées.\n\n"
             "- [i]Rester connecté au Développeur :[/i] Ouvre directement le groupe WhatsApp officiel pour rejoindre la communauté, suivre les mises à jour et échanger.\n\n"
             "- [i]Comment fonctionne l'appli :[/i] Ouvre ce guide d'aide interactif pour vous orienter à tout moment dans l'utilisation de l'application.\n\n"
             "• [b]Astuce :[/b] Restez connectés au Développeur via le bouton WhatsApp pour suivre les mises à jour et évolutions du Développeur !\n\n"
@@ -933,22 +958,49 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             " - [i]Entraînement :[/i] Idéal pour s'exercer à son rythme sur des séries de questions dynamiques adaptées à votre classe. Un chronomètre rythmé et un système de combo pimentent vos sessions !\n\n"
             " - [i]Examen Blanc :[/i] Un mode sérieux composé d'une série de 10 questions chronométrées pour tester vos connaissances en conditions réalistes et obtenir un bilan noté sur 20.\n\n"
             " - [i]Joue jusqu'à 4 :[/i] Un mode multijoueur local (de 2 à 4 participants) pour affronter vos amis et voir qui a les meilleures compétences mathématiques.\n\n"
-            " - [i]Niveaux d'Activités :[/i] Un parcours progressif de 16 activités spécialisées (allant du calcul mental à la physique quantique et l'analyse) qui se débloquent selon votre rang.\n\n"
-            " - [i]Sujets Casse-Tête :[/i] Des défis de logique, des paradoxes mathématiques et des énigmes algébriques pour stimuler vos neurones.\n\n"
+            " - [i]Niveaux d'Activités :[/i] Un parcours progressif de 16 activités spécialisées (allant du calcul mental à la physique quantique et l'analyse) qui se débloquent selon votre rang. Chaque activité est une série de 5 questions (voir « Activités & Casse-Tête » plus bas).\n\n"
+            " - [i]Sujets Casse-Tête :[/i] Des défis de logique : paradoxes mathématiques, énigmes algébriques et défis géométriques poussés, en séries de 5 questions avec démonstration.\n\n"
+            "[b]Comment répondre à une question (Entraînement et Examen) :[/b]\n\n"
+            " - [i]Répondre :[/i] Touche directement une proposition (A, B, C, D) dans la page : elle se met en surbrillance pour confirmer ton choix. Les formules s'affichent en vrai rendu mathématique (fractions, racines, puissances, intégrales...).\n\n"
+            " - [i]Entraînement :[/i] 60 secondes par question. Bonne réponse : +2 PR (+2 de bonus si tu réponds en moins de 7 s) et le combo monte. Mauvaise réponse ou temps écoulé : -3 PR et -2 de combo. La correction (vert / rouge) et la démonstration apparaissent sous les propositions, puis « Continuer » lance la question suivante.\n\n"
+            " - [i]Examen Blanc :[/i] 10 questions et un chronomètre global de 5 minutes. Pas de correction entre les questions : la note sur 20 et toutes les corrections détaillées s'affichent à la fin. Note ≥ 16 : +6 PR ; note ≥ 10 : +2 PR ; sinon -4 PR.\n\n"
+            " - [i]Un doute ? :[/i] Après une réponse en entraînement, ce bouton te permet d'écrire au développeur si une question te semble confuse ou erronée.\n\n"
+            " - [i]Fiches Cours :[/i] Ouvre le formulaire de ta classe. Le chronomètre d'entraînement est arrêté pendant la lecture ; « Retour au Quiz » te ramène avec une nouvelle question.\n\n"
+            " - [i]Boutons de retour :[/i] « Quitter » (quiz) et « Retour » (autres écrans) ramènent toujours à l'écran précédent ou au menu ; « Quitter » arrête aussi le chronomètre. Chaque écran en possède un : questions IA (« Retour »), corrections (« Retour Assistant IA »), discussion IA (« Retour aux requêtes »), fiches de cours (« Retour au Quiz »), bilan d'examen (« Retour au menu »), salles en ligne (« Retour » / « Quitter la salle »), partie multijoueur (« Quitter la partie »). L'icône de réglages en haut à droite du menu principal ouvre les paramètres.\n\n"
+            "[b]Activités & Casse-Tête :[/b]\n\n"
+            " - [i]Niveaux d'Activités :[/i] Les 16 activités (Calcul Mental Éclair, Arithmétique de Base, Fractions & Proportions, Équations du 1er Degré, Puissances & Racines, Identités Remarquables, Systèmes Linéaires, Dérivation & Limites, Nombres Complexes, Calcul Intégral, Mécanique du Point, Thermodynamique Appliquée, Optique Géométrique, Électrostatique Avancée, Théorèmes Vectoriels Complexes, Physique Quantique 101) se débloquent avec ton grade. Une activité verrouillée affiche le grade requis ; touche-la pour le voir.\n\n"
+            " - [i]Sujets Casse-Tête :[/i] Choisis « Paradoxes Mathématiques », « Énigmes Algébriques » ou « Défis Géométriques Poussés ».\n\n"
+            " - [i]Déroulement :[/i] Chaque session compte 5 questions à 4 propositions. Touche une proposition : la correction (vert / rouge) et la démonstration s'affichent, puis « Question suivante » (ou « Voir le bilan » à la dernière). Le bilan montre ton score sur 5 et la correction détaillée ; tu peux « Rejouer » ou revenir. La difficulté monte avec ton grade. Il n'y a pas de chrono dans ces modules et ils ne modifient pas tes PR.\n\n"
+            " - [i]Retour :[/i] « Retour aux niveaux » / « Retour aux sujets » est présent à chaque question, sur le bilan et sur les écrans d'erreur ; « Revenir à l'Accueil » est en bas des menus.\n\n"
+            "[b]Affichage & rendu mathématique :[/b]\n\n"
+            " - [i]Partage automatique de l'espace :[/i] sur les écrans de question (Entraînement, Examen, IA, salles, multijoueur), l'énoncé et les propositions se partagent l'écran. Celui qui a besoin de plus de place la prend, celui qui en a moins la cède. Si tout est long, la police se réduit légèrement ; si c'est encore trop, chaque zone défile séparément. Après la réponse, toute la page défile pour lire la démonstration. La barre de boutons reste toujours visible en bas.\n\n"
+            " - [i]Formules :[/i] partout où il y a des mathématiques (questions, propositions, corrections, fiches de cours, discussion avec l'IA, résumés multijoueur, détails des salles, activités et casse-tête), elles s'affichent en vrai rendu : fractions, racines, puissances, intégrales, vecteurs, systèmes. Les maths écrites à la main (x², √x, a/b) sont converties automatiquement.\n\n"
+            " - [i]Formules qui ne s'affichent pas :[/i] un avertissement orange apparaît en bas de l'écran. Vérifie que le dossier « katex » est présent dans l'application, ou active Internet.\n\n"
+            "[b]Compte, Multijoueur & Classe :[/b]\n\n"
+            " - [i]Compte :[/i] « Créer mon compte » (nom, île, e-mail, mot de passe) ou « J'ai déjà un compte ». Un code de vérification peut être envoyé par e-mail. Sans compte tu peux « Continuer hors-ligne » : le quiz fonctionne, mais le classement, les salles et la sauvegarde en ligne sont désactivés. Tu peux copier ton identifiant avec le bouton ID en haut, et te déconnecter dans « Mon compte ».\n\n"
+            " - [i]Même téléphone (2 à 4 joueurs) :[/i] Chacun répond à son tour sur le même appareil (la question en haut, un bouton A B C D par joueur en bas : la zone des joueurs ne prend que la place nécessaire). Quand la moitié des joueurs a répondu, un compte à rebours de 15 s démarre. Un résumé corrigé et les scores s'affichent à la fin, avec Revanche et Accueil.\n\n"
+            " - [i]Salle en ligne :[/i] Crée une salle (un code est généré) ou rejoins-en une avec le code. Chacun joue sur son téléphone, sans limite de joueurs ; le classement final est affiché à tous.\n\n"
+            " - [i]Mode Classe :[/i] Le professeur (hôte) crée la session, lance les questions, suit qui a répondu et consulte le détail des réponses ; les élèves rejoignent avec le code du professeur.\n\n"
+            " - [i]Joueurs :[/i] Recherche un joueur par identifiant ou prénom, vois qui est en ligne et consulte le classement (Top 20). Il faut Internet et avoir accepté le partage de données.\n\n"
+            " - [i]Bandeau « Pas de connexion Internet » :[/i] Le bouton « Activer Internet » ouvre les réglages du téléphone. Ta progression reste enregistrée sur le téléphone et se met à jour avec ton compte quand la connexion est disponible.\n\n"
             "[b]Guide de l'Assistant IA & Menu Rapide :[/b]\n\n"
             " - [i]Étape 1 & Choix de Classe :[/i] Sélectionnez votre classe parmi les options disponibles (de la 6ème à la L1 MPC) pour adapter le niveau de difficulté.\n\n"
             " - [i]Menu Rapide (Icône Menu) :[/i] Accessible à tout moment via l'icône dédiée en haut à droite pour basculer rapidement vers l'accueil ou soumettre des requêtes libres.\n\n"
             " - [i]Requêtes & Idées Libres :[/i] Saisissez un sujet, un chapitre ou une question précise et choisissez une catégorie (Résumé du chapitre, Question, Infos sur la matière, etc.) pour interroger directement l'IA et dialoguer dans un chat interactif de suivi.\n\n"
             " - [i]Mode Examen (Simple ou Sujet Complet) :[/i] Choisissez un format d'examen personnalisé de 10 ou 20 questions avec un récapitulatif détaillé et des corrections en cas d'erreur, ou générez un sujet type contrôle officiel complet.\n\n"
+            " - [i]Entraînement IA :[/i] L'IA génère une question à 4 propositions ; touche ta réponse, lis la correction puis « Question suivante » ou « Retour ». Si l'IA est indisponible, un message s'affiche avec le bouton « Retour ».\n\n"
+            " - [i]Discussion de suivi :[/i] Après une requête libre, pose d'autres questions en bas de l'écran avec « Envoyer » ; la conversation défile automatiquement et les formules sont rendues.\n\n"
             "[b]Guide de l'Espace Évolution :[/b]\n\n"
             " - [i]Mon Grade, XP & Rythme :[/i] Visualisez votre score de rang (PR), votre niveau d'expérience (XP) et votre jauge de progression avec une analyse intelligente de votre rythme.\n\n"
             " - [i]Liste Officielle des Rangs :[/i] Consultez la hiérarchie complète des grades disponibles, du niveau Bronze jusqu'aux sommets.\n\n"
-            " - [i]Maîtrise des Chapitres :[/i] Un suivi personnalisé sous forme de barres de progression récapitulant vos réussites notion notion.\n\n"
+            " - [i]Maîtrise des Chapitres :[/i] Un suivi personnalisé sous forme de barres de progression récapitulant vos réussites notion.\n\n"
             "[b]Aide et Fiches de Cours :[/b]\n\n"
             " - [i]Fiches Cours :[/i] Accessible pendant les quiz pour afficher un résumé théorique et des rappels adaptés à votre classe.\n\n"
             " - [i]Démonstrations Algébriques :[/i] En cas d'erreur, une correction détaillée et rigoureuse vous est fournie pour comprendre immédiatement le raisonnement.\n\n"
             "[b]Astuce :[/b] Utilisez le bouton d'avis au développeur pour laisser vos remarques et votre numéro WhatsApp afin d'échanger directement !"
         )
+        if self.page_aide(texte_explicatif):
+            return
 
         contenu = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(15))
 
@@ -1342,25 +1394,45 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.scroll_interaction.unbind(height=self._maj_hauteur_interaction)
         self.scroll_interaction.do_scroll_y = True
         self.scroll_texte.opacity = 1
+        self.scroll_texte.size_hint_y = 0.32
+        self.scroll_interaction.size_hint_y = 0.68
         self.interaction_layout.height = dp(500)
 
-    def _construire_zone_quiz(self, q, titre, cb_choix, avec_explication=False):
-        """Page KaTeX (énoncé + propositions cliquables) + barre Quitter / Fiches Cours."""
+    def _barre_boutons(self, boutons, font='16sp'):
+        """Barre de boutons de bas d'écran : boutons = [(texte, couleur, callback_sans_argument), ...] ; chacun prend la même largeur."""
+        barre = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(10))
+        for texte, couleur, cb in boutons:
+            b = Button(text=texte, halign='center', valign='middle', background_color=couleur, font_size=font, bold=True)
+            b.bind(on_press=lambda x, c=cb: c())
+            barre.add_widget(b)
+        return barre
+
+    def _page_math(self, titre, cartes, boutons, defiler_bas=False):
+        """Page de lecture plein écran (rendu mathématique KaTeX) + barre de boutons en bas. L'espace est partagé automatiquement :
+        la page prend tout ce que la barre de boutons ne prend pas."""
+        self.question_label.text = ""
+        self.interaction_layout.clear_widgets()
+        self._disposition_question()
+        zone = BoxLayout(orientation='vertical', size_hint=(1, 1), spacing=dp(6))
+        web = AndroidMathWebView(size_hint=(1, 1))
+        web.set_document(titre, cartes, defiler_bas=defiler_bas)
+        zone.add_widget(web)
+        zone.add_widget(self._barre_boutons(boutons))
+        self.interaction_layout.add_widget(zone)
+        return web
+
+    def _construire_zone_quiz(self, q, titre, cb_choix, avec_explication=False, boutons=None):
+        """Page KaTeX (énoncé + propositions cliquables) + barre de boutons (par défaut Quitter / Fiches Cours)."""
         L = self.interaction_layout
         L.clear_widgets()
         zone = BoxLayout(orientation='vertical', size_hint=(1, 1), spacing=dp(6))
         web = AndroidMathWebView(size_hint=(1, 1))
         web.set_question(q, titre_tete=titre, avec_explication=avec_explication, cliquable=True, on_choix=cb_choix)
         zone.add_widget(web)
-        barre = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(10))
-        btn_quitter = Button(text="« Quitter", halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1),
-                             font_size='18sp', bold=True)
-        btn_quitter.bind(on_press=self.quitter_action)
-        btn_aide = Button(text="Fiches Cours", halign='center', valign='middle', background_color=(0.3, 0.2, 0.6, 1),
-                          font_size='18sp', bold=True)
-        btn_aide.bind(on_press=self.afficher_formulaire_cours)
-        barre.add_widget(btn_quitter)
-        barre.add_widget(btn_aide)
+        if boutons is None:
+            boutons = [("« Quitter", (0.75, 0.2, 0.2, 1), lambda: self.quitter_action(None)),
+                       ("Fiches Cours", (0.3, 0.2, 0.6, 1), lambda: self.afficher_formulaire_cours(None))]
+        barre = self._barre_boutons(boutons, font='18sp')
         zone.add_widget(barre)
         L.add_widget(zone)
         self.web_quiz, self.barre_quiz = web, barre
@@ -1432,6 +1504,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             "email_utilisateur": getattr(self, 'email_utilisateur', ""),
             "compte_hors_ligne": getattr(self, 'compte_hors_ligne', False)
         }
+        data.update(self.locky_vers_dict())
         try:
             with open(self.nom_fichier_sauvegarde, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
@@ -1472,6 +1545,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
                 self.ile_utilisateur = data.get("ile_utilisateur", "")
                 self.email_utilisateur = data.get("email_utilisateur", "")
                 self.compte_hors_ligne = data.get("compte_hors_ligne", False)
+                self.locky_depuis_dict(data)
                 saved_stats = data.get("stats_chapitres", {})
                 for k, v in saved_stats.items():
                     if k in self.stats_chapitres:
@@ -1562,6 +1636,9 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self._fixer_hauteur()
 
     def afficher_menu_principal_modes(self):
+        self._defi_actif = False
+        self._multi_actif = False
+        self.locky_signal("menu")
         self._arreter_poll_salon()
         self.salon = None
         if self.question_label.parent is not self.scroll_texte:
@@ -1570,8 +1647,8 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             self.scroll_texte.clear_widgets()
             self.scroll_texte.add_widget(self.question_label)
 
-        if hasattr(self, 'btn_menu_ia') and self.btn_menu_ia in self.root_layout.children:
-            self.root_layout.remove_widget(self.btn_menu_ia)
+        if getattr(self, 'btn_menu_ia', None) is not None and self.btn_menu_ia.parent:
+            self.btn_menu_ia.parent.remove_widget(self.btn_menu_ia)
 
         if self.btn_parametres not in self.info_layout.children:
             if self.btn_parametres.parent:
@@ -1588,6 +1665,8 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         rang_actuel = self.obtenir_rang_actuel()
         self.info_label.text = f"{self.nom_utilisateur}    LV:{self.niveau_profil}\n{rang_actuel}  XP:{self.xp}  RP:{self.points_de_rang}"
         self.question_label.text = f" Bienvenue sur Math Quiz, cher\n{self.nom_utilisateur}\n\nSélectionne une activité pour commencer :"
+        if self.page_accueil():                      # page d'accueil plein écran ; sinon on garde les boutons ci-dessous
+            return
 
         layout_l1 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(10))
 
@@ -1678,7 +1757,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
 
         layout_l4 = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(50), spacing=dp(10))
 
-        btn_ia = Button(text='Lancer l\'IA ', font_size='22sp', height=dp(50), bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', size_hint=(1, None), background_color=(0, 0, 0, 0))
+        btn_ia = Button(text='Lancer l\'IA (en ligne) ', font_size='22sp', height=dp(50), bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', size_hint=(1, None), background_color=(0, 0, 0, 0))
         with btn_ia.canvas.before:
             Color(0, 0, 0, 0.3)
             btn_ia.ombre = RoundedRectangle(pos=(btn_ia.x + dp(12), btn_ia.y - dp(12)), size=btn_ia.size, radius=[dp(27)])
@@ -1741,6 +1820,9 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             return 0
 
     def afficher_sous_menu_niveaux_activites(self, instance):
+        self.locky_signal("activites")
+        if self.page_activites():
+            return
         self.nettoyer_boutons_bas()
         self.scroll_texte.size_hint_y = 0.16
         self.scroll_interaction.size_hint_y = 0.84
@@ -1806,26 +1888,30 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-    def lancer_activite_niveau(self, nom_activite):
-        self.interaction_layout.clear_widgets()
-        self.info_label.text = f"Activité : {nom_activite}"
-        self.question_label.text = f"Session de l'activité '{nom_activite}' lancée avec succès.\nBonne concentration !"
+    # ------------------------------------------------------------------------------------------
+    # Modules « Niveaux d'Activités » (16) et « Sujets Casse-Tête » (3) : séries de questions à
+    # rendu mathématique, avec correction immédiate, bilan final et boutons de retour partout.
+    # ------------------------------------------------------------------------------------------
+    NB_QUESTIONS_DEFI = 5
 
-        btn_retour = Button(text="« Retour aux niveaux", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
-        btn_retour.bind(on_press=self.afficher_sous_menu_niveaux_activites)
-        self.interaction_layout.add_widget(btn_retour)
-        with btn_retour.canvas.before:
-            Color(0, 0, 0, 0.3)
-            btn_retour.ombre = RoundedRectangle(pos=(btn_retour.x + dp(17), btn_retour.y - dp(17)), size=btn_retour.size, radius=[dp(27)])
-            Color(0.75, 0.2, 0.2, 1)
-            btn_retour.fond = RoundedRectangle(pos=btn_retour.pos, size=btn_retour.size, radius=[dp(27)])
-            btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
-            btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
+    def _difficulte_defi(self):
+        """1 à 5 : monte avec le grade du joueur."""
+        try:
+            return max(1, min(5, 1 + self.determiner_rang_et_details()[3] // 10))
+        except Exception:
+            return 1
+
+    def lancer_activite_niveau(self, nom_activite):
+        self._demarrer_session_defi("activite", nom_activite, nom_activite,
+                                    lambda: self.afficher_sous_menu_niveaux_activites(None), "« Retour aux niveaux")
 
     def alerte_activite_verrouillee(self, rang_requis):
         self.question_label.text = f"ACTIVITÉ VERROUILLÉE !\n\nTu dois atteindre au minimum le grade '{rang_requis}' pour débloquer cette option. Améliore ton rang !"
 
     def afficher_sous_menu_sujets_casse_tete(self, instance):
+        self.locky_signal("casse_tete")
+        if self.page_casse_tete():
+            return
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
 
@@ -1882,22 +1968,107 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.interaction_layout.add_widget(btn_retour)
 
     def lancer_sujet_casse_tete(self, type_defi):
-        self.interaction_layout.clear_widgets()
-        self.info_label.text = f"Défi : {type_defi}"
-        self.question_label.text = f"Le module spécial '{type_defi}' est en cours de déploiement pour propulser ton niveau vers les sommets."
+        self._demarrer_session_defi("casse_tete", type_defi, TYPES_CASSE_TETE.get(type_defi, type_defi),
+                                    lambda: self.afficher_sous_menu_sujets_casse_tete(None), "« Retour aux sujets")
 
-        btn_retour = Button(text="« Retour aux sujets", font_size='22sp', bold=True, text_size=(1 * Window.width - dp(20), None), halign='center', valign='middle', background_color=(0, 0, 0, 0), size_hint_y=None, height=dp(50))
-        btn_retour.bind(on_press=self.afficher_sous_menu_sujets_casse_tete)
-        self.interaction_layout.add_widget(btn_retour)
-        with btn_retour.canvas.before:
-            Color(0, 0, 0, 0.3)
-            btn_retour.ombre = RoundedRectangle(pos=(btn_retour.x + dp(17), btn_retour.y - dp(17)), size=btn_retour.size, radius=[dp(27)])
-            Color(0.75, 0.2, 0.2, 1)
-            btn_retour.fond = RoundedRectangle(pos=btn_retour.pos, size=btn_retour.size, radius=[dp(27)])
-            btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
-            btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
+    def _demarrer_session_defi(self, genre, cle, titre, retour, texte_retour):
+        self.arreter_chrono()
+        self.chrono_label.text = ""
+        if self.btn_parametres in self.info_layout.children:
+            self.info_layout.remove_widget(self.btn_parametres)
+        self._defi = {"genre": genre, "cle": cle, "titre": titre, "retour": retour, "texte_retour": texte_retour,
+                      "index": 0, "nb": self.NB_QUESTIONS_DEFI, "score": 0, "historique": [], "q": None,
+                      "difficulte": self._difficulte_defi(), "combo": 0}
+        self._defi_actif = True
+        self.locky_signal("defi_calcul_mental" if (cle in __import__('locky_core').ACTIVITES_SANS_CALCULATRICE
+                                                   or 'mental' in str(titre).lower()) else "defi", titre=titre)
+        self._question_defi()
+
+    def _bouton_retour_defi(self, texte, cb):
+        b = Button(text=texte, font_size='18sp', bold=True, size_hint_y=None, height=dp(50),
+                   background_color=(0.75, 0.2, 0.2, 1))
+        b.bind(on_press=lambda x: cb())
+        return b
+
+    def _question_defi(self):
+        s = self._defi
+        self.question_label.text = ""
+        self.interaction_layout.clear_widgets()
+        self._disposition_question()
+        try:
+            q = (generer_activite(s["cle"], s["difficulte"]) if s["genre"] == "activite"
+                 else generer_casse_tete(s["cle"]))
+        except Exception as e:
+            self._disposition_standard()
+            self.question_label.text = f"Impossible de générer ce défi pour le moment :\n{e}"
+            self.interaction_layout.clear_widgets()
+            self.interaction_layout.add_widget(self._bouton_retour_defi(s["texte_retour"], s["retour"]))
+            return
+        s["q"] = q
+        self.info_label.text = f"{s['titre']}\n Question {s['index'] + 1}/{s['nb']}"
+        self._construire_zone_quiz(q, f"{s['titre']} · Q{s['index'] + 1}/{s['nb']}", self._repondre_defi,
+                                   avec_explication=True,
+                                   boutons=[(s["texte_retour"], (0.75, 0.2, 0.2, 1), s["retour"])])
+
+    def _repondre_defi(self, index_choisi):
+        s = self._defi
+        q = s["q"]
+        valide = 0 <= index_choisi < len(q["options"])
+        ok = (index_choisi == q["index_correct"])
+        if ok:
+            s["score"] += 1
+        s["historique"].append({"enonce": q["enonce"], "choix": q["options"][index_choisi] if valide else "—",
+                                "bonne": q["bonne_reponse"], "explication": q.get("explication", ""), "ok": ok})
+        s["combo"] = s.get("combo", 0) + 1 if ok else 0
+        self.locky_signal("bonne" if ok else "fausse", combo=s["combo"])
+        SoundManager.play("succes" if ok else "erreur")
+        self.info_label.text = f"{s['titre']}\n{'Correct !' if ok else 'Faux'}  ({s['score']}/{s['index'] + 1})"
+        web = getattr(self, 'web_quiz', None)
+        if web is not None:
+            web.reveler(index_choisi, q["index_correct"])          # vert / rouge + démonstration, en rendu mathématique
+        barre = getattr(self, 'barre_quiz', None)
+        if barre is None:
+            return
+        barre.clear_widgets()
+        derniere = (s["index"] + 1 >= s["nb"])
+        b_retour = Button(text=s["texte_retour"], halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1),
+                          font_size='16sp', bold=True)
+        b_retour.bind(on_press=lambda x: s["retour"]())
+        b_suite = Button(text="Voir le bilan »" if derniere else "Question suivante »", halign='center', valign='middle',
+                         background_color=(0.2, 0.7, 0.4, 1), font_size='16sp', bold=True)
+        b_suite.bind(on_press=lambda x: self._suite_defi())
+        barre.add_widget(b_retour)
+        barre.add_widget(b_suite)
+
+    def _suite_defi(self):
+        s = self._defi
+        s["index"] += 1
+        if s["index"] < s["nb"]:
+            self._question_defi()
+        else:
+            self._bilan_defi()
+
+    def _bilan_defi(self):
+        self._defi_actif = False
+        _sd = self._defi
+        self.locky_signal("bilan_defi_top" if _sd["score"] * 2 >= _sd["nb"] else "bilan_defi_bas", score=_sd["score"], nb=_sd["nb"])
+        s = self._defi
+        self.info_label.text = f"{s['titre']}\nScore : {s['score']}/{s['nb']}"
+        cartes = [("Résultat", f"{self.nom_utilisateur} : {s['score']}/{s['nb']}", "ok" if s["score"] * 2 >= s["nb"] else "ko")]
+        for i, r in enumerate(s["historique"], 1):
+            corps = f"{r['enonce']}\n\nTa réponse : {r['choix']}"
+            if not r["ok"]:
+                corps += f"\nRéponse attendue : {r['bonne']}"
+                if r["explication"]:
+                    corps += f"\n\nDémonstration :\n{r['explication']}"
+            cartes.append((f"Question {i} · {'Correct' if r['ok'] else 'À revoir'}", corps, "ok" if r["ok"] else "ko"))
+        rejouer = lambda: self._demarrer_session_defi(s["genre"], s["cle"], s["titre"], s["retour"], s["texte_retour"])
+        self._page_math(f"Bilan · {s['titre']}", cartes,
+                        [(s["texte_retour"], (0.75, 0.2, 0.2, 1), s["retour"]), ("Rejouer »", (0.2, 0.7, 0.4, 1), rejouer)])
 
     def afficher_sous_menu_joueurs(self, instance):
+        if self.page_nombre_joueurs():
+            return
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
         self.nettoyer_boutons_bas()
@@ -2034,6 +2205,21 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
 
         self.layout_suggestions = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(0))
         box_inputs.add_widget(self.layout_suggestions)
+
+        # --- calculatrice : autorisée ou non pendant cette session de groupe ---
+        self.btn_calc_groupe = Button(size_hint_y=None, height=dp(44), bold=True, font_size='15sp')
+
+        def _maj_btn_calc():
+            ok_ = getattr(self, 'calc_groupe_autorisee', True)
+            self.btn_calc_groupe.text = "Calculatrice : AUTORISÉE" if ok_ else "Calculatrice : INTERDITE"
+            self.btn_calc_groupe.background_color = (0.15, 0.6, 0.35, 1) if ok_ else (0.75, 0.2, 0.2, 1)
+
+        def _basculer_calc(*_):
+            self.calc_groupe_autorisee = not getattr(self, 'calc_groupe_autorisee', True)
+            _maj_btn_calc()
+        self.btn_calc_groupe.bind(on_release=_basculer_calc)
+        _maj_btn_calc()
+        box_inputs.add_widget(self.btn_calc_groupe)
 
         scroll_inputs.add_widget(box_inputs)
         conteneur_config.add_widget(scroll_inputs)
@@ -2260,6 +2446,8 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         return "Général"
 
     def initialiser_partie_multijoueur(self):
+        self._multi_actif = True
+        self.locky_signal("multi")
         self.tour_joueur_actuel = 0
         self.numero_question_multi = 1
         self.historique_global_multi = []
@@ -2341,7 +2529,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self._sig_joueurs = None
 
         zone = BoxLayout(orientation='vertical', size_hint=(1, 1), spacing=dp(4))
-        web = AndroidMathWebView(size_hint=(1, 0.55))
+        web = AndroidMathWebView(size_hint=(1, 1))          # prend tout ce que les joueurs et les boutons ne prennent pas
         web.set_question({"enonce": q['enonce_latex'], "options": q['options'], "explication": ""},
                          titre_tete=f"{q['chapitre']} · Q{self.numero_question_multi}/{self.total_questions_par_joueur}",
                          avec_explication=False)
@@ -2351,11 +2539,19 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         zone.add_widget(self.lbl_chrono_multi)
 
         cols_count = 2 if len(self.joueurs_data) >= 2 else 1
-        scroll = ScrollView(size_hint=(1, 0.45), do_scroll_x=False)
+        scroll = ScrollView(size_hint=(1, None), height=dp(110), do_scroll_x=False)
         self.grille_joueurs = GridLayout(cols=cols_count, spacing=dp(5), padding=dp(2), size_hint_y=None)
         self.grille_joueurs.bind(minimum_height=self.grille_joueurs.setter('height'))
         scroll.add_widget(self.grille_joueurs)
         zone.add_widget(scroll)
+
+        def _partager(*_):
+            """Partage automatique : les joueurs prennent la place dont ils ont besoin (au plus la moitié), la question prend le reste."""
+            besoin = self.grille_joueurs.height + dp(6)
+            scroll.height = max(dp(60), min(besoin, zone.height * 0.5))
+        self.grille_joueurs.bind(height=_partager)
+        zone.bind(height=_partager)
+        Clock.schedule_once(_partager, 0)
 
         barre = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(46))
         btn_q = Button(text="« Quitter la partie", halign='center', valign='middle', background_color=(0.75, 0.2, 0.2, 1),
@@ -2489,6 +2685,8 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.lancer_prochain_tour_multijoueur()
 
     def afficher_ecran_resume_multijoueur(self):
+        self._multi_actif = False
+        self.locky_signal("bilan_multi")
         self._disposition_standard()
         self.interaction_layout.clear_widgets()
         self.scroll_texte.clear_widgets()
@@ -2637,7 +2835,9 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         popup_stats.bind(on_dismiss=lambda *a: AndroidMathWebView.afficher_tous())
         popup_stats.open()
 
-    def afficher_sous_menu_evolution(self, instance):
+    def afficher_sous_menu_evolution_legacy(self, instance):
+        """Ancien menu Kivy (secours). Le nouveau menu est FonctionsRangs.afficher_sous_menu_evolution."""
+        self.locky_signal("evolution")
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
 
@@ -2861,10 +3061,13 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
 
     def selectionner_mode(self, mode):
         self.mode_jeu = mode
+        self.locky_signal("choix_mode", mode=mode)
         self.sauvegarder_donnees_locales()
         self.afficher_menu_niveaux()
 
     def afficher_menu_niveaux(self):
+        if self.page_niveaux():
+            return
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
 
@@ -2904,6 +3107,9 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.interaction_layout.add_widget(btn_retour)
 
     def afficher_menu_classes(self, niveau, list_cl):
+        self.locky_signal("choix_classe")
+        if self.page_classes(niveau, list_cl):
+            return
         if self.btn_parametres in self.info_layout.children:
             self.info_layout.remove_widget(self.btn_parametres)
 
@@ -2945,6 +3151,8 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.pile_chapitres_courants = []
         self.sauvegarder_donnees_locales()
 
+        self._defi_actif = False
+        self.locky_signal("examen" if self.mode_jeu == "Examen" else "entrainement")
         self.synchroniser_profil(force=True)   # n'envoie que si connecté ET consentement donné
 
         self.initialiser_playlist_question()
@@ -2967,6 +3175,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             self.generer_question_dynamique()
 
     def afficher_formulaire_cours(self, instance):
+        self.locky_signal("cours")
         self.arreter_chrono()
         self.nettoyer_boutons_bas()
         self.interaction_layout.clear_widgets()
@@ -2979,7 +3188,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         if fiches:
             cartes = [(titre, texte, "") for titre, texte in fiches]
         else:
-            cartes = [("Cours", self.formulaire_cours.get(self.classe_actuelle, "Aucun résumé disponible pour cette classe."), "")]
+            cartes = [("Cours", texte_vers_latex(self.formulaire_cours.get(self.classe_actuelle) or "Aucun résumé disponible pour cette classe."), "")]
         web = AndroidMathWebView(size_hint=(1, 1))
         web.set_document(f"Fiche de cours · {self.classe_actuelle}", cartes)     # rendu mathématique KaTeX
         zone.add_widget(web)
@@ -3061,6 +3270,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.sauvegarder_donnees_locales()
 
     def afficher_tableau_de_bord_stats(self, instance):
+        self.locky_signal("stats")
         self.arreter_chrono()
         self.nettoyer_boutons_bas()
         self.interaction_layout.clear_widgets()
@@ -3232,6 +3442,8 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.lancer_chrono_entrainement()
 
     def quitter_action(self, instance):
+        self.arreter_chrono()                      # sinon le chrono (entraînement / examen) continue en arrière-plan
+        self.chrono_label.text = ""
         if self.sound:
             self.sound.stop()
         self.jouer_musique_suivante()
@@ -3258,6 +3470,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.historique_scores.append(self.points_de_rang)
         self.enregistrer_statistique_reponse(self.chapitre_en_cours, est_correct)
         self.synchroniser_profil()
+        self.locky_signal("bonne" if est_correct else "fausse", combo=self.combo, rapide=(temps_mis < 7.0))
         self.info_label.text = f" {self.obtenir_rang_actuel()}\n {bilan}"
 
         # la correction (vert / rouge + démonstration en LaTeX) s'affiche dans la page elle-même
@@ -3413,6 +3626,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
 
         self.enregistrer_statistique_reponse(self.chapitre_en_cours, est_correct)
         self.examen_index_actuel += 1
+        self.locky_signal("reponse_notee")
 
         if self.examen_index_actuel < 10:
             self.generer_question_examen()
@@ -3426,6 +3640,9 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
 
         note_sur_20 = (self.score / 10) * 20
         self.info_label.text = f"Bilan Examen\nNote : {note_sur_20:.1f}/20"
+        self.locky_noter_examen(note_sur_20)
+        self.locky_signal("bilan_examen_top" if note_sur_20 >= 16 else "bilan_examen_ok" if note_sur_20 >= 10 else "bilan_examen_bas",
+                          note=f"{note_sur_20:.1f}")
 
         if note_sur_20 >= 16:
             self.points_de_rang += 6
@@ -3478,6 +3695,8 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.interaction_layout.add_widget(zone)
 
     def afficher_menu_ia_parametres(self, instance):
+        if self.page_ia_classes():
+            return
         if hasattr(self, 'info_layout') and hasattr(self, 'btn_parametres'):
             if self.btn_parametres in self.info_layout.children:
                 self.info_layout.remove_widget(self.btn_parametres)
@@ -3534,21 +3753,19 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
-        self.btn_menu_ia = Button(
-            background_normal='icone_appli/menu.png',
-            background_down='icone_appli/menu.png',
-            size_hint=(None, None),
-            size=(dp(45), dp(45)),
-            pos_hint={'top': 0.98, 'right': 0.98}
-        )
-        self.btn_menu_ia.bind(on_press=self.ouvrir_panneau_menu_ia)
-        self.root_layout.add_widget(self.btn_menu_ia)
+        if getattr(self, 'btn_menu_ia', None) is not None and self.btn_menu_ia.parent:
+            self.btn_menu_ia.parent.remove_widget(self.btn_menu_ia)
+        self.btn_menu_ia = self.creer_icone_ia(self.ouvrir_panneau_menu_ia)
+        self.info_layout.add_widget(self.btn_menu_ia)      # dans l'en-tête : plus de chevauchement avec la bannière réseau
 
     def enregistrer_et_continuer(self, classe_choisie):
         self.classe_choisie = classe_choisie
         self.etape_selection_mode(classe_choisie)
 
     def ouvrir_panneau_menu_ia(self, instance):
+        self.locky_signal("ia")
+        if self.page_menu_ia():
+            return
         if hasattr(self, 'layout_panneau_menu') and self.layout_panneau_menu in self.root_layout.children:
             return
         self.layout_panneau_menu = FloatLayout()
@@ -3834,10 +4051,6 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
     def afficher_discussion_ia(self, resultat, requete_initiale, categorie):
-        self.scroll_texte.size_hint_y = 1.0
-        self.scroll_interaction.size_hint_y = None
-        self.scroll_interaction.height = 0
-
         if isinstance(resultat, str):
             try:
                 resultat = json.loads(resultat)
@@ -3854,139 +4067,41 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         elif len(self.historique_dialogue) == 1 and self.historique_dialogue[0]["role"] == "user":
             self.historique_dialogue.append({"role": "ia", "texte": reponse_texte})
 
-        self.interaction_layout.clear_widgets()
-
-        self.interaction_layout.size_hint_y = 1
-        self.interaction_layout.height = Window.height
-        self.interaction_layout.orientation = 'vertical'
-        self.interaction_layout.spacing = dp(5)
-        self.interaction_layout.padding = [dp(5), dp(5), dp(5), dp(5)]
-
         self.info_label.text = f"Requête Libre - {categorie}"
         self.question_label.text = ""
+        self.interaction_layout.clear_widgets()
+        self._disposition_question()               # la discussion occupe tout l'espace libre (rendu mathématique)
+        self._chat_attente = False
 
-        self.scroll_chat = ScrollView(
-            size_hint=(1, 1),
-            do_scroll_x=False,
-            do_scroll_y=True
-        )
+        zone = BoxLayout(orientation='vertical', size_hint=(1, 1), spacing=dp(6))
+        self.web_chat = AndroidMathWebView(size_hint=(1, 1))
+        zone.add_widget(self.web_chat)
 
-        self.box_messages = BoxLayout(
-            orientation='vertical',
-            size_hint_y=None,
-            spacing=dp(10),
-            padding=[dp(5), dp(5)]
-        )
-        self.box_messages.bind(minimum_height=self.box_messages.setter('height'))
-        self.scroll_chat.add_widget(self.box_messages)
-        self.interaction_layout.add_widget(self.scroll_chat)
-
-        zone_bas = BoxLayout(
-            orientation='vertical',
-            size_hint=(1, None),
-            spacing=dp(8)
-        )
-        zone_bas.bind(minimum_height=zone_bas.setter('height'))
-
-        self.box_saisie = BoxLayout(
-            orientation='horizontal',
-            size_hint=(1, None),
-            height=dp(48),
-            spacing=dp(5)
-        )
-
-        self.input_relance = TextInput(
-            hint_text="Poser une question de suivi...",
-            multiline=True,
-            font_size='14sp',
-            size_hint=(0.75, 1)
-        )
-
-        btn_relancer = Button(
-            text="Envoyer",
-            font_size='14sp',
-            bold=True,
-            size_hint=(0.25, 1),
-            background_color=(0.2, 0.7, 0.4, 1)
-        )
+        self.box_saisie = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(48), spacing=dp(5))
+        self.input_relance = TextInput(hint_text="Poser une question de suivi...", multiline=True,
+                                       font_size='14sp', size_hint=(0.75, 1))
+        btn_relancer = Button(text="Envoyer", font_size='14sp', bold=True, size_hint=(0.25, 1),
+                              background_color=(0.2, 0.7, 0.4, 1))
         btn_relancer.bind(on_press=lambda inst: self.envoyer_relance_directe(requete_initiale, categorie))
-
         self.box_saisie.add_widget(self.input_relance)
         self.box_saisie.add_widget(btn_relancer)
-        zone_bas.add_widget(self.box_saisie)
-
-        btn_retour = Button(
-            text="« Retour aux requêtes",
-            font_size='16sp',
-            bold=True,
-            size_hint=(1, None),
-            height=dp(48),
-            background_color=(0, 0, 0, 0)
-        )
-        btn_retour.bind(on_press=lambda x: self.afficher_formulaire_requete_libre(None))
-        zone_bas.add_widget(btn_retour)
-
-        with btn_retour.canvas.before:
-            Color(0, 0, 0, 0.3)
-            btn_retour.ombre = RoundedRectangle(pos=(btn_retour.x + dp(3), btn_retour.y - dp(3)), size=btn_retour.size, radius=[dp(27)])
-            Color(0.75, 0.2, 0.2, 1)
-            btn_retour.fond = RoundedRectangle(pos=btn_retour.pos, size=btn_retour.size, radius=[dp(27)])
-            btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
-            btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
-
-        self.interaction_layout.add_widget(zone_bas)
+        zone.add_widget(self.box_saisie)
+        zone.add_widget(self._barre_boutons([("« Retour aux requêtes", (0.75, 0.2, 0.2, 1),
+                                              lambda: self.afficher_formulaire_requete_libre(None))]))
+        self.interaction_layout.add_widget(zone)
 
         self.rafraichir_bulles_dialogue()
 
     def rafraichir_bulles_dialogue(self):
-        self.box_messages.clear_widgets()
-
-        for msg in self.historique_dialogue:
-            is_user = (msg["role"] == "user")
-
-            ligne_container = BoxLayout(
-                orientation='horizontal',
-                size_hint_y=None,
-                padding=[dp(2), dp(2)]
-            )
-
-            prefixe = "[b]Vous :[/b] " if is_user else "[b]IA :[/b] "
-
-            lbl_message = Label(
-                text=prefixe + msg["texte"],
-                markup=True,
-                font_size='14sp',
-                size_hint=(None, None),
-                text_size=(Window.width * 0.70, None),
-                padding=[dp(10), dp(8)],
-                halign='left',
-                valign='top'
-            )
-            lbl_message.bind(texture_size=lambda inst, val: setattr(inst, 'size', val))
-
-            with lbl_message.canvas.before:
-                if is_user:
-                    Color(0, 0, 0, 0.9)
-                else:
-                    Color(0.15, 0.25, 0.35, 0.95)
-
-                lbl_message.bg_rect = RoundedRectangle(pos=lbl_message.pos, size=lbl_message.size, radius=[dp(10)])
-                lbl_message.bind(
-                    pos=lambda inst, val: setattr(inst.bg_rect, 'pos', val),
-                    size=lambda inst, val: setattr(inst.bg_rect, 'size', val)
-                )
-
-            if is_user:
-                ligne_container.add_widget(BoxLayout(size_hint_x=1))
-                ligne_container.add_widget(lbl_message)
-            else:
-                ligne_container.add_widget(lbl_message)
-                ligne_container.add_widget(BoxLayout(size_hint_x=1))
-
-            lbl_message.bind(size=lambda inst, val: setattr(ligne_container, 'height', val[1] + dp(4)))
-            self.box_messages.add_widget(ligne_container)
-
-        self.scroll_chat.scroll_y = 0
+        """Redessine toute la discussion dans une page KaTeX (formules en rendu mathématique, défilement automatique en bas)."""
+        web = getattr(self, 'web_chat', None)
+        if web is None:
+            return
+        cartes = [("Vous" if m["role"] == "user" else "IA", texte_vers_latex(m["texte"]), "moi" if m["role"] == "user" else "ia")
+                  for m in self.historique_dialogue]
+        if getattr(self, '_chat_attente', False):
+            cartes.append(("IA", "Génération en cours...", "ia"))
+        web.set_document("Discussion avec l'IA", cartes, defiler_bas=True)
 
     def envoyer_relance_directe(self, requete_initiale, categorie):
         txt = self.input_relance.text.strip()
@@ -3994,41 +4109,14 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             return
 
         self.historique_dialogue.append({"role": "user", "texte": txt})
-        self.rafraichir_bulles_dialogue()
-
-        self.layout_chargement = BoxLayout(
-            orientation='horizontal',
-            size_hint_y=None,
-            height=dp(30),
-            spacing=dp(8),
-            padding=[dp(10), dp(2)]
-        )
-
-        img_synchro = Image(
-            source='icone_appli/synchronisation.png',
-            size_hint=(None, None),
-            size=(dp(24), dp(24))
-        )
-
-        lbl_chargement = Label(
-            text="Génération en cours...",
-            font_size='13sp',
-            italic=True,
-            size_hint_x=1,
-            halign='left',
-            valign='middle'
-        )
-        lbl_chargement.bind(size=lbl_chargement.setter('text_size'))
-
-        self.layout_chargement.add_widget(img_synchro)
-        self.layout_chargement.add_widget(lbl_chargement)
-        self.box_messages.add_widget(self.layout_chargement)
-
+        self._chat_attente = True
         self.input_relance.text = ""
-        self.scroll_chat.scroll_y = 0
+        self.rafraichir_bulles_dialogue()
 
         contexte_global = f"Catégorie: {categorie}\nSujet initial: {requete_initiale}\n\n--- Historique ---\n"
         for item in self.historique_dialogue:
+            if item.get("erreur"):
+                continue
             role_nom = "Utilisateur" if item["role"] == "user" else "Assistant IA"
             contexte_global += f"{role_nom}: {item['texte']}\n"
 
@@ -4058,8 +4146,7 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         )
 
     def ajouter_reponse_au_chat(self, resultat):
-        if hasattr(self, 'layout_chargement') and self.layout_chargement in self.box_messages.children:
-            self.box_messages.remove_widget(self.layout_chargement)
+        self._chat_attente = False
 
         if isinstance(resultat, str):
             try:
@@ -4077,32 +4164,23 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.historique_dialogue.append({"role": "ia", "texte": reponse})
         self.rafraichir_bulles_dialogue()
 
-        self.scroll_chat.scroll_y = 0
-
     def afficher_erreur_chat(self, erreur):
-        if hasattr(self, 'layout_chargement') and self.layout_chargement in self.box_messages.children:
-            self.box_messages.remove_widget(self.layout_chargement)
-
+        self._chat_attente = False
         msg = "Erreur de connexion au serveur"
         if isinstance(erreur, dict):
-            msg = erreur.get("reponse", msg)
+            msg = erreur.get("message") or erreur.get("reponse") or msg
         elif isinstance(erreur, str):
             msg = erreur
-
-        lbl_err = Label(
-            text=f"[color=ff3333]{msg}[/color]",
-            markup=True,
-            font_size='13sp',
-            size_hint_y=None,
-            height=dp(30)
-        )
-        self.box_messages.add_widget(lbl_err)
+        self.historique_dialogue.append({"role": "ia", "texte": f"⚠ {msg}", "erreur": True})
+        self.rafraichir_bulles_dialogue()
 
     def etape_selection_mode(self, classe_choisie):
         self.nettoyer_boutons_bas()
 
         self.classe_choisie = classe_choisie
         self.classe_actuelle = classe_choisie
+        if self.page_ia_modes(classe_choisie):
+            return
 
         self.interaction_layout.clear_widgets()
 
@@ -4174,6 +4252,8 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
     def etape_sous_menu_examen(self):
+        if self.page_ia_examen():
+            return
         self.interaction_layout.clear_widgets()
         self.info_label.text = "Mode Examen - Type d'épreuve"
         self.question_label.text = "Choisis le format de l'examen :"
@@ -4242,6 +4322,8 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
 
     def etape_choix_nombre_questions(self):
+        if self.page_ia_nombre():
+            return
         self.interaction_layout.clear_widgets()
         self.info_label.text = "Examen Simple - Longueur"
         self.question_label.text = "Combien de questions souhaites-tu pour cet examen ?"
@@ -4307,6 +4389,15 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
         self.appeler_api_flask(mode="Sujet Complet")
 
     def requeter_ia_generer(self, mode_str):
+        # on sort de la page plein écran (si on y était) pour afficher le message d'attente
+        self._disposition_standard()
+        self.scroll_texte.size_hint_y = 0.3
+        self.scroll_interaction.size_hint_y = 0.7
+        if self.question_label.parent is not self.scroll_texte:
+            self.scroll_texte.clear_widgets()
+            if self.question_label.parent:
+                self.question_label.parent.remove_widget(self.question_label)
+            self.scroll_texte.add_widget(self.question_label)
         self.interaction_layout.clear_widgets()
         self.info_label.text = f"Génération IA - {mode_str}"
 
@@ -4364,228 +4455,123 @@ body {{ margin: 0; padding: 12px; font-family: sans-serif; font-size: 19px; line
             except Exception:
                 resultat = {"enonce": resultat}
 
-        self.enonce_actuel = resultat.get("enonce", "Erreur : aucune donnée reçue")
-        self.bonne_reponse_ia = resultat.get("bonne_reponse", "")
-        self.options_ia = resultat.get("options", [])
-        self.explication_ia = resultat.get("explication", "Aucune explication fournie.")
+        # les formules écrites en texte brut (x², √x, a/b ...) sont converties en LaTeX : rendu mathématique garanti
+        self.enonce_actuel = texte_vers_latex(str(resultat.get("enonce", "Erreur : aucune donnée reçue")))
+        self.bonne_reponse_ia = texte_vers_latex(str(resultat.get("bonne_reponse", ""))).strip()
+        self.options_ia = [texte_vers_latex(str(o)) for o in resultat.get("options", [])]
+        self.explication_ia = texte_vers_latex(str(resultat.get("explication", "Aucune explication fournie.")))
+        retour_ia = lambda: self.afficher_menu_ia_parametres(None)
 
         if "Sujet Complet" in getattr(self.info_label, 'text', ''):
-            self.question_label.text = self.enonce_actuel
-            self.interaction_layout.clear_widgets()
-
-            btn_retour = Button(
-                text=" Retour Assistant IA",
-                font_size='18sp',
-                bold=True,
-                text_size=(1 * Window.width - dp(20), None),
-                halign='center',
-                valign='middle',
-                background_color=(0, 0, 0, 0),
-                size_hint_y=None,
-                height=dp(50)
-            )
-            btn_retour.bind(on_press=lambda x: self.afficher_menu_ia_parametres(None))
-            self.interaction_layout.add_widget(btn_retour)
-            with btn_retour.canvas.before:
-                Color(0, 0, 0, 0.3)
-                btn_retour.ombre = RoundedRectangle(pos=(btn_retour.x + dp(3), btn_retour.y - dp(3)), size=btn_retour.size, radius=[dp(27)])
-                Color(0.75, 0.2, 0.2, 1)
-                btn_retour.fond = RoundedRectangle(pos=btn_retour.pos, size=btn_retour.size, radius=[dp(27)])
-                btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
-                btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
+            self._page_math(f"Sujet · {self.classe_actuelle}", [("Sujet", self.enonce_actuel, "")],
+                            [(" Retour Assistant IA", (0.75, 0.2, 0.2, 1), retour_ia)])
             return
 
-        self.question_label.text = f"Question :\n{latex_vers_texte(self.enonce_actuel)}"
-        self.interaction_layout.clear_widgets()
+        if not self.options_ia:
+            # IA indisponible / erreur serveur : message (avec rendu mathématique) + bouton retour
+            self._page_math("Assistant IA", [("Message", self.enonce_actuel, "ko")],
+                            [("« Retour", (0.75, 0.2, 0.2, 1), retour_ia)])
+            return
 
-        for opt in self.options_ia:
-            btn_opt = Button(
-                text=latex_vers_texte(opt),
-                font_size='18sp',
-                bold=True,
-                text_size=(1 * Window.width - dp(20), None),
-                halign='center',
-                valign='middle',
-                background_color=(0, 0, 0, 0),
-                size_hint_y=None,
-                height=dp(50)
-            )
-            btn_opt.bind(on_press=lambda instance, choix=opt: self.verifier_reponse_interactive(choix))
-            self.interaction_layout.add_widget(btn_opt)
-            with btn_opt.canvas.before:
-                Color(0, 0, 0, 0.3)
-                btn_opt.ombre = RoundedRectangle(pos=(btn_opt.x + dp(3), btn_opt.y - dp(3)), size=btn_opt.size, radius=[dp(27)])
-                Color(0.14, 0.09, 0.32, 1)
-                btn_opt.fond = RoundedRectangle(pos=btn_opt.pos, size=btn_opt.size, radius=[dp(27)])
-                btn_opt.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
-                btn_opt.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
+        max_exam = getattr(self, 'max_questions_examen', 0)
+        index_exam = getattr(self, 'index_examen_actuel', 0)
+        examen = (max_exam > 0 and index_exam <= max_exam)
+        titre = f"Examen IA · Q{index_exam}/{max_exam}" if examen else "Entraînement IA"
+        q = {"enonce": self.enonce_actuel, "options": self.options_ia, "explication": self.explication_ia}
+
+        def choisi(i):
+            if 0 <= i < len(self.options_ia):
+                self.verifier_reponse_interactive(self.options_ia[i])
+
+        # page KaTeX plein écran : énoncé + propositions cliquables (rendu mathématique), bouton retour en bas
+        self.question_label.text = ""
+        self.interaction_layout.clear_widgets()
+        self._disposition_question()
+        self._construire_zone_quiz(q, titre, choisi, avec_explication=False,
+                                   boutons=[("« Retour", (0.75, 0.2, 0.2, 1), retour_ia)])
 
     def verifier_reponse_interactive(self, choix_utilisateur):
         try:
             bonne_reponse = getattr(self, 'bonne_reponse_ia', '').strip()
-            enonce = latex_vers_texte(getattr(self, 'enonce_actuel', ''))
-            explication = latex_vers_texte(getattr(self, 'explication_ia', 'Aucune explication disponible.'))
+            enonce = getattr(self, 'enonce_actuel', '')
+            explication = getattr(self, 'explication_ia', 'Aucune explication disponible.')
             nom = getattr(self, 'nom_utilisateur', 'Élève')
-
             est_correct = (str(choix_utilisateur).strip() == bonne_reponse)
+            retour_ia = lambda: self.afficher_menu_ia_parametres(None)
 
             max_exam = getattr(self, 'max_questions_examen', 0)
             index_exam = getattr(self, 'index_examen_actuel', 0)
-
             is_mode_examen = (max_exam > 0 and index_exam <= max_exam)
 
             if not is_mode_examen:
                 self.total_questions_session = getattr(self, 'total_questions_session', 0) + 1
                 if est_correct:
                     self.score_session = getattr(self, 'score_session', 0) + 1
-
                 note_sur_20 = (self.score_session / self.total_questions_session) * 20
-                self.interaction_layout.clear_widgets()
 
-                if est_correct:
-                    self.question_label.text = (
-                        f"EXCELLENT TRAVAIL, {nom} ! \n\n"
-                        f"Question posée : {enonce}\n\n"
-                        f"Bonne réponse\n"
-                        f"Note actuelle : {note_sur_20:.2f} / 20"
-                    )
-                else:
-                    self.question_label.text = (
-                        f"Dommage {nom}, c'est une erreur \n\n"
-                        f"Question posée : {enonce}\n"
-                        f"Bonne réponse : {latex_vers_texte(bonne_reponse)}\n\n"
-                        f"Explication :\n{explication}\n\n"
-                        f"Note actuelle : {note_sur_20:.2f} / 20"
-                    )
+                cartes = [("Résultat", f"EXCELLENT TRAVAIL, {nom} !" if est_correct else f"Dommage {nom}, c'est une erreur.",
+                           "ok" if est_correct else "ko"),
+                          ("Question posée", enonce, "")]
+                if not est_correct:
+                    cartes.append(("Bonne réponse", bonne_reponse, ""))
+                    cartes.append(("Explication", explication, ""))
+                cartes.append(("Note actuelle", f"{note_sur_20:.2f} / 20", ""))
+                self._page_math("Correction", cartes, [
+                    ("« Retour", (0.75, 0.2, 0.2, 1), retour_ia),
+                    ("Question suivante »" if est_correct else "Continuer »", (0.2, 0.7, 0.4, 1),
+                     lambda: self.requeter_ia_generer("Entraînement"))])
+                return
 
-                btn_suite = Button(
-                    text="Question Suivante" if est_correct else "Continuer l'entraînement",
-                    font_size='18sp',
-                    bold=True,
-                    text_size=(1 * Window.width - dp(20), None),
-                    halign='center',
-                    valign='middle',
-                    background_color=(0, 0, 0, 0),
-                    size_hint_y=None,
-                    height=dp(50)
-                )
-                btn_suite.bind(on_press=lambda x: self.requeter_ia_generer("Entraînement"))
-                self.interaction_layout.add_widget(btn_suite)
+            self.score_examen = getattr(self, 'score_examen', 0)
+            if est_correct:
+                self.score_examen += 1
+            if not hasattr(self, 'historique_examen'):
+                self.historique_examen = []
+            self.historique_examen.append({
+                "question": enonce,
+                "choix": choix_utilisateur,
+                "bonne_reponse": bonne_reponse,
+                "correct": est_correct,
+                "explication": explication
+            })
 
-                with btn_suite.canvas.before:
-                    Color(0, 0, 0, 0.3)
-                    btn_suite.ombre = RoundedRectangle(pos=(btn_suite.x + dp(3), btn_suite.y - dp(3)), size=btn_suite.size, radius=[dp(27)])
-                    Color(0.2, 0.7, 0.4, 1)
-                    btn_suite.fond = RoundedRectangle(pos=btn_suite.pos, size=btn_suite.size, radius=[dp(27)])
-                    btn_suite.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
-                    btn_suite.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
+            if self.index_examen_actuel < self.max_questions_examen:
+                self.requeter_ia_generer("Examen Simple")
+                return
 
-            else:
-                self.score_examen = getattr(self, 'score_examen', 0)
-                if est_correct:
-                    self.score_examen += 1
+            note_examen_20 = (self.score_examen / self.max_questions_examen) * 20
+            mention = "Échec"
+            if note_examen_20 >= 16:
+                mention = "Très Bien "
+            elif note_examen_20 >= 14:
+                mention = "Bien "
+            elif note_examen_20 >= 12:
+                mention = "Assez Bien "
+            elif note_examen_20 >= 10:
+                mention = "Passable "
 
-                if not hasattr(self, 'historique_examen'):
-                    self.historique_examen = []
-
-                self.historique_examen.append({
-                    "question": enonce,
-                    "choix": choix_utilisateur,
-                    "bonne_reponse": bonne_reponse,
-                    "correct": est_correct,
-                    "explication": explication
-                })
-
-                if self.index_examen_actuel < self.max_questions_examen:
-                    self.requeter_ia_generer("Examen Simple")
-                    return
-                else:
-                    note_examen_20 = (self.score_examen / self.max_questions_examen) * 20
-                    mention = "Échec"
-                    if note_examen_20 >= 16:
-                        mention = "Très Bien "
-                    elif note_examen_20 >= 14:
-                        mention = "Bien "
-                    elif note_examen_20 >= 12:
-                        mention = "Assez Bien "
-                    elif note_examen_20 >= 10:
-                        mention = "Passable "
-
-                    self.question_label.text = f"RÉCAPITULATIF DE L'EXAMEN\nNote Finale : {note_examen_20:.2f} / 20\nMention : {mention}\n"
-                    self.interaction_layout.clear_widgets()
-
-                    container_recap = BoxLayout(
-                        orientation='vertical',
-                        size_hint_y=None,
-                        spacing=dp(12)
-                    )
-                    container_recap.bind(minimum_height=container_recap.setter('height'))
-
-                    for i, res in enumerate(self.historique_examen, 1):
-                        box_item = BoxLayout(
-                            orientation='horizontal',
-                            size_hint_y=None,
-                            spacing=dp(10),
-                            padding=[dp(5), dp(5)]
-                        )
-
-                        chemin_img = "icone_appli/succes.png" if res["correct"] else "icone_appli/erreur.png"
-
-                        img_statut = Image(
-                            source=chemin_img,
-                            size_hint=(None, None),
-                            size=(dp(30), dp(30)),
-                            pos_hint={'top': 1}
-                        )
-                        box_item.add_widget(img_statut)
-
-                        texte_q = f"Q{i}: {res['question']}\nVotre réponse: {latex_vers_texte(res['choix'])}"
-                        if not res["correct"]:
-                            texte_q += f"\nAttendu: {latex_vers_texte(res['bonne_reponse'])}\nExpl: {res['explication']}"
-
-                        lbl_details = Label(
-                            text=texte_q,
-                            font_size='14sp',
-                            size_hint_y=None,
-                            text_size=(Window.width - dp(80), None),
-                            halign='left',
-                            valign='top'
-                        )
-                        lbl_details.bind(texture_size=lambda inst, val: setattr(inst, 'height', val[1]))
-                        box_item.add_widget(lbl_details)
-
-                        lbl_details.bind(height=lambda inst, val: setattr(box_item, 'height', max(val, dp(30))))
-                        container_recap.add_widget(box_item)
-
-                    self.interaction_layout.add_widget(container_recap)
-
-                    self.max_questions_examen = 0
-                    self.index_examen_actuel = 0
-
-            btn_retour = Button(
-                text="Retour Assistant IA",
-                font_size='18sp',
-                bold=True,
-                text_size=(1 * Window.width - dp(20), None),
-                halign='center',
-                valign='middle',
-                background_color=(0, 0, 0, 0),
-                size_hint_y=None,
-                height=dp(50)
-            )
-            btn_retour.bind(on_press=lambda x: self.afficher_menu_ia_parametres(None))
-            self.interaction_layout.add_widget(btn_retour)
-
-            with btn_retour.canvas.before:
-                Color(0, 0, 0, 0.3)
-                btn_retour.ombre = RoundedRectangle(pos=(btn_retour.x + dp(3), btn_retour.y - dp(3)), size=btn_retour.size, radius=[dp(27)])
-                Color(0.75, 0.2, 0.2, 1)
-                btn_retour.fond = RoundedRectangle(pos=btn_retour.pos, size=btn_retour.size, radius=[dp(27)])
-                btn_retour.bind(pos=lambda inst, val: setattr(inst.fond, 'pos', val) or setattr(inst.ombre, 'pos', (val[0] + dp(3), val[1] - dp(3))))
-                btn_retour.bind(size=lambda inst, val: setattr(inst.fond, 'size', val) or setattr(inst.ombre, 'size', val))
+            cartes = [("Récapitulatif de l'examen", f"Note finale : {note_examen_20:.2f} / 20\nMention : {mention}",
+                       "ok" if note_examen_20 >= 10 else "ko")]
+            for i, res in enumerate(self.historique_examen, 1):
+                corps = f"{res['question']}\n\nVotre réponse : {res['choix']}"
+                if not res["correct"]:
+                    corps += f"\nRéponse attendue : {res['bonne_reponse']}"
+                    if res["explication"]:
+                        corps += f"\n\nExplication :\n{res['explication']}"
+                cartes.append((f"Question {i} · {'Correct' if res['correct'] else 'À revoir'}", corps,
+                               "ok" if res["correct"] else "ko"))
+            self.max_questions_examen = 0
+            self.index_examen_actuel = 0
+            self._page_math("Corrections de l'examen", cartes, [(" Retour Assistant IA", (0.75, 0.2, 0.2, 1), retour_ia)])
 
         except Exception as e:
+            self._disposition_standard()
             self.question_label.text = f"Erreur de traitement :\n{str(e)}"
+            self.interaction_layout.clear_widgets()
+            btn_err = Button(text="« Retour", font_size='18sp', bold=True, size_hint_y=None, height=dp(50),
+                             background_color=(0.75, 0.2, 0.2, 1))
+            btn_err.bind(on_press=lambda x: self.afficher_menu_ia_parametres(None))
+            self.interaction_layout.add_widget(btn_err)
 
     def moteur_generateur_mathematique(self, classe_cible, chapitre_cible):
         _, _, _, index_grade = self.determiner_rang_et_details()
