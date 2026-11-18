@@ -103,9 +103,7 @@ Projet conçu et développé par Fazad Nassur (Moroni, Comores).
 
 Objectif : Démocratiser l'excellence scientifique par le numérique, offrir des outils modernes et adaptés aux réalités locales, et promouvoir l'innovation technologique aux Comores.
 
-```
 
 <p align="center">
   <i>© 2026 Fazad Nassur / Omnimath. Tous droits réservés.</i>
 </p>
-```
